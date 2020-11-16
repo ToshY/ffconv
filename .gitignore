@@ -1,0 +1,10 @@
+# Spyder project settings
+.spyproject
+.spyderproject
+
+# pycache
+src/__pycache__
+
+# exclude tests files
+input/*
+output/*

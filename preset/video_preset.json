@@ -1,0 +1,15 @@
+{
+    "-c:v": "libx264",
+    "-s": "",
+    "-r": "",
+    "-pix_fmt": "yuv420p",
+    "-crf": "18",
+    "-b:v": "",
+    "-minrate": "",
+    "-maxrate": "",
+    "-bufsize": "",
+    "-preset": "slow",
+    "-tune": "",
+    "-profile:v": "high",
+    "-level:v": "4.0"
+}
