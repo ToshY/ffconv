@@ -370,7 +370,11 @@ def stream_user_input(ffprobe_result):
             raise Exception(f"{tc.RED}No streams for type `{ty}` found. Please make sure there's atleast 1 video, 1 audio and 1 subtitle stream.{tc.NC}")
         
         if st['count'] == 1:                
-            stream_map[ty] = st['streams'][0]['index']
+            # If subtitle remap back to 0
+            if ty == 's':
+                stream_map[ty] = st['streams'][0]['index'] - st['count'] + 1
+            else:
+                stream_map[ty] = st['streams'][0]['index']
         else:
             print(f"\r\n\r\n> Multiple `{ty}` streams detected:\r\n")
             main_allowed = []
