@@ -365,16 +365,13 @@ def stream_user_input(ffprobe_result):
     """
     
     stream_map = {}
+    stream_sum_count = 0
     for ty,st in ffprobe_result.items():
         if st['count'] == 0:
             raise Exception(f"{tc.RED}No streams for type `{ty}` found. Please make sure there's atleast 1 video, 1 audio and 1 subtitle stream.{tc.NC}")
         
         if st['count'] == 1:                
-            # If subtitle remap back to 0
-            if ty == 's':
-                stream_map[ty] = st['streams'][0]['index'] - st['count'] + 1
-            else:
-                stream_map[ty] = st['streams'][0]['index']
+            stream_map[ty] = st['streams'][0]['index']
         else:
             print(f"\r\n\r\n> Multiple `{ty}` streams detected:\r\n")
             main_allowed = []
@@ -396,12 +393,14 @@ def stream_user_input(ffprobe_result):
                 user_input_map = input(f"\r\n# {tc.RED}Invalid input;{tc.NC} Please specify a correct index to map: ")
             print(f"\r> Stream index {tc.GREEN}`{user_input_map}`{tc.NC} selected!")
             
-            # If subtitle remap back to 0
-            if ty == 's':
-                stream_map[ty] = int(user_input_map) - st['count'] + 1
-            else:
-                stream_map[ty] = user_input_map
-            
+            stream_map[ty] = user_input_map
+        
+        # Remap subtitle due to filter complex     
+        if ty != 's':
+            stream_sum_count = stream_sum_count + st['count']
+        else:
+            stream_map[ty] = int(stream_map[ty]) - stream_sum_count
+    
     return stream_map
 
 def read_json(input_file):
