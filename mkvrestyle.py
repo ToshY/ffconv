@@ -10,6 +10,7 @@ MKVrestyle - Restyle the main font styling of the embedded ASS file
 python ffconv.py -i "./input/" -o "./output/" -sp "./presets/subtitle_preset.json"
 """
 
+import os
 import sys
 import re
 import argparse
@@ -18,8 +19,12 @@ import json
 import pyfiglet
 import subprocess as sp
 import functools as fc
+from contextlib import redirect_stderr
 from operator import itemgetter 
-from pathlib import Path   
+from pathlib import Path
+from contextlib import redirect_stderr
+from fontTools import ttLib
+from pymediainfo import MediaInfo
 from src.simulate import SimulateLoading
 from src.colours import TextColours as tc
 
@@ -125,9 +130,58 @@ def get_lines_per_type(my_lines, split_at=['Format: ']):
     return [(i,[x for x in re.split('|'.join(split_at)+'|,', s) if x])  for i,s in enumerate(my_lines) if any(s.startswith(xs) for xs in split_at)]
 
 def additional_info():
-    
     return {'WrapStyle': '0','ScaledBorderAndShadow': 'yes','YCbCr Matrix': 'TV.709'}
+
+# def font_image(dummy_text="The quick brown fox jumps over the lazy dog. 1234567890,'\"(!?)"):
     
+
+def embedded_fonts_in_file(input_file):
+
+    mkv_cmd = ['mkvmerge','--identify','--identification-format','json', input_file]
+    cprocess = sp.run(mkv_cmd,capture_output=True)
+
+    # Get attachments
+    attachments = json.loads(cprocess.stdout)['attachments']
+    
+    # To export
+    exp_font_list, font_files_loc = export_fonts_list(attachments)
+    
+    # MKVextract
+    mkv_ext = ['mkvextract','attachments', input_file] + exp_font_list
+    oprocess = sp.run(mkv_ext,capture_output=True)
+    
+    # Get font names
+    fns = [get_font_name(el) for el in font_files_loc]
+    print(fns)
+            
+    return mkv_cmd
+
+def export_fonts_list(attachments, temp_folder='fonts'):
+    
+    ex_args = []
+    font_files = []
+    for el in attachments:
+        fl = os.path.join(wdir, temp_folder, el['file_name'])
+        font_files.append(fl)
+        ex_args.append('{}:{}'.format(el['id'], fl))
+    
+    return ex_args, font_files
+    
+def get_font_name(font_path):
+    font = ttLib.TTFont(font_path, ignoreDecompileErrors=True)
+    with redirect_stderr(None):
+        names = font['name'].names
+
+    details = {}
+    for x in names:
+        if x.langID == 0 or x.langID == 1033:
+            try:
+                details[x.nameID] = x.toUnicode()
+            except UnicodeDecodeError:
+                details[x.nameID] = x.string.decode(errors='ignore')
+
+    return {'name':details[4],'family':details[1],'style':details[2]}
+
 def cwd():
     """ 
     Get current working directory.
