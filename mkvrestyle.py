@@ -7,7 +7,7 @@ Created on Sat Nov 14 17:11:27 2020
 MKVrestyle - Restyle the main font styling of the embedded ASS file
 
 # Example
-python ffconv.py -i "./input/" -o "./output/" -sp "./presets/subtitle_preset.json"
+python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.json"
 """
 
 import os
@@ -130,38 +130,54 @@ def get_lines_per_type(my_lines, split_at=['Format: ']):
     return [(i,[x for x in re.split('|'.join(split_at)+'|,', s) if x])  for i,s in enumerate(my_lines) if any(s.startswith(xs) for xs in split_at)]
 
 def additional_info():
-    return {'WrapStyle': '0','ScaledBorderAndShadow': 'yes','YCbCr Matrix': 'TV.709'}
+    return {'WrapStyle': '0','ScaledBorderAndShadow': 'yes','YCbCr Matrix': 'TV.709'}    
 
-# def font_image(dummy_text="The quick brown fox jumps over the lazy dog. 1234567890,'\"(!?)"):
+def extract_subsnfonts(input_file, save_loc):
     
+    # file str
+    input_file_str = str(input_file)
 
-def embedded_fonts_in_file(input_file):
-
-    mkv_cmd = ['mkvmerge','--identify','--identification-format','json', input_file]
+    mkv_cmd = ['mkvmerge','--identify','--identification-format','json', input_file_str]
     cprocess = sp.run(mkv_cmd,capture_output=True)
 
+    # Json output
+    mkvout = json.loads(cprocess.stdout)
+    
     # Get attachments
-    attachments = json.loads(cprocess.stdout)['attachments']
+    attachments = mkvout['attachments']
+    tracks = mkvout['tracks']
     
-    # To export
-    exp_font_list, font_files_loc = export_fonts_list(attachments)
+    ass_subs = next(item for item in tracks if item["codec"] == "SubStationAlpha")
+    ass_subs_idx = ass_subs['id']
+    ass_track_name = input_file.stem + '_track' + str(ass_subs_idx) + subs_mimetype(ass_subs['properties']['codec_id'])
     
-    # MKVextract
-    mkv_ext = ['mkvextract','attachments', input_file] + exp_font_list
-    oprocess = sp.run(mkv_ext,capture_output=True)
+    # MKVextract subtitle track
+    mkv_subs = ['mkvextract','tracks', input_file] + ['0:' + os.path.join(save_loc, ass_track_name)]
+    
+    # To export fonts
+    exp_font_list, font_files_loc = export_fonts_list(attachments, save_loc)
+    
+    # MKVextract attachments
+    mkv_attachments = ['mkvextract','attachments', input_file] + exp_font_list
     
     # Get font names
     fns = [get_font_name(el) for el in font_files_loc]
-    print(fns)
             
-    return mkv_cmd
+    return fns
 
-def export_fonts_list(attachments, temp_folder='fonts'):
-    
+def subs_mimetype(codec_id):
+    if codec_id.lower() == 's_text/ass':
+        return '.ass'
+    elif codec_id.lower() == 'text/plain':
+        return '.srt'
+    else:
+        raise Exception(f"Invalid codec `{codec_id}`")
+        
+def export_fonts_list(attachments, save_loc):
     ex_args = []
     font_files = []
     for el in attachments:
-        fl = os.path.join(wdir, temp_folder, el['file_name'])
+        fl = os.path.join(save_loc, el['file_name'])
         font_files.append(fl)
         ex_args.append('{}:{}'.format(el['id'], fl))
     
@@ -197,33 +213,41 @@ def main():
     # Input arguments
     inputs, outputs, subtitle_presets, overwrite = cli_args()
     
-    # Read files
-    lines = read_subs(inputs[0])
     
-    # Get Resolution/Format/Styles/Dialogues indices
-    resx = get_lines_per_type(lines, ['PlayResX: '])
-    resy = get_lines_per_type(lines, ['PlayResY: '])
-    format_lines = get_lines_per_type(lines, ['Format: '])
-    style_lines = get_lines_per_type(lines, ['Style: '])
-    dialogue_lines = get_lines_per_type(lines, ['Dialogue: ','Comment: '])
+    for fl in inputs:
+        # Prepare attachments folder path
+        fl_attachments_folder = Path(fl.with_suffix('') + '_attachments')
+        
+        # Extract subs + fonts
+        fl_attachments_folder = extract_subsnfonts(fl, fl_attachments_folder)
     
-    # Style names
-    style_names = [(i,el[0],el[1][0]) for i,el in enumerate(style_lines)]
-    
-    # Style names from dialogue
-    style_names_dialogue = list(set([el[1][3] for el in dialogue_lines]))
-    
-    # Keep the following styles which are in both defined in dialogue and styles
-    keep_style_names = set(style_names_dialogue)-set(style_names)
-    
-    # Find them back in styles
-    keep_style_lines_idx = [el[0] for el in style_names if el[2] in keep_style_names]
-    remove_style_lines_idx = [el[0] for el in style_names if el[2] not in keep_style_names]
-    
-    # Kept styles used for restyling
-    style_lines_kept = list(itemgetter(*keep_style_lines_idx)(style_lines))
-    
-    #print(resx, resy)
+        # Read subs
+        lines = read_subs(inputs[0])
+        
+        # Get Resolution/Format/Styles/Dialogues indices
+        resx = get_lines_per_type(lines, ['PlayResX: '])
+        resy = get_lines_per_type(lines, ['PlayResY: '])
+        format_lines = get_lines_per_type(lines, ['Format: '])
+        style_lines = get_lines_per_type(lines, ['Style: '])
+        dialogue_lines = get_lines_per_type(lines, ['Dialogue: ','Comment: '])
+        
+        # Style names
+        style_names = [(i,el[0],el[1][0]) for i,el in enumerate(style_lines)]
+        
+        # Style names from dialogue
+        style_names_dialogue = list(set([el[1][3] for el in dialogue_lines]))
+        
+        # Keep the following styles which are in both defined in dialogue and styles
+        keep_style_names = set(style_names_dialogue)-set(style_names)
+        
+        # Find them back in styles
+        keep_style_lines_idx = [el[0] for el in style_names if el[2] in keep_style_names]
+        remove_style_lines_idx = [el[0] for el in style_names if el[2] not in keep_style_names]
+        
+        # Kept styles used for restyling
+        style_lines_kept = list(itemgetter(*keep_style_lines_idx)(style_lines))
+        
+        print(resx, resy)
 
 if __name__ == "__main__":
     """ Main """
@@ -231,9 +255,12 @@ if __name__ == "__main__":
     # CWD
     wdir = cwd()
     
+    # Attachments folder gene
+    
     # Stop execution at keyboard input
     try:
         resl = main()
+        #print(resl)
     except KeyboardInterrupt:
         print('\r\n\r\n> Execution cancelled by user')
         pass
