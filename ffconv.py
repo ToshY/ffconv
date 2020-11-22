@@ -629,7 +629,7 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
     
     # FFmpeg command
     ffmpeg_cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'quiet', '-y', '-i', str(input_file),
-                 '-metadata', 'title=' + '"{}"'.format(input_file.stem),
+                 '-metadata', 'title=' + '{}'.format(input_file.stem),
                  '-map', v_map, '-map', a_map, '-filter_complex', s_map] + v_data + a_data + \
                  ['-movflags', 'faststart', output_file]
                  
