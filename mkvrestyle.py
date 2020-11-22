@@ -151,20 +151,15 @@ def check_args(inputs, outputs, spresets, overwrites):
         sdata = []
         for spp in spresets:
             sdata.append(
-                dict_to_list(
-                    remove_empty_dict_values(
+                remove_empty_dict_values(
                         read_json(list(spp.keys())[0])
                     )
                 )
-            )
-    
     else:
-        sdata = dict_to_list(
-                    remove_empty_dict_values(
-                        read_json(*spresets[0])
-                    )
-                )
-    
+        sdata = remove_empty_dict_values(
+            read_json(*spresets[0])
+            )
+                
     len_overwrites = len(overwrites)
     if len_overwrites != 1:
         if len_inputs != len_overwrites:
@@ -493,8 +488,8 @@ def main():
             lines = read_subs(ass[1])
                 
             # Get Resolution/Format/Styles/Dialogues indices
-            resx = get_lines_per_type(lines, ['PlayResX: '])
-            resy = get_lines_per_type(lines, ['PlayResY: '])
+            ass_ress = {'ResX':get_lines_per_type(lines, ['PlayResX: '])[0],
+                        'ResY':get_lines_per_type(lines, ['PlayResY: '])[0]}
             format_lines = get_lines_per_type(lines, ['Format: '])
             style_lines = get_lines_per_type(lines, ['Style: '])
             dialogue_lines = get_lines_per_type(lines, ['Dialogue: ','Comment: '])
@@ -518,7 +513,21 @@ def main():
             # User styling settings
             sub_settings = b['subtitle_preset']
             
+            # Get video dimensions
+            cprocess = sp.Popen(['ffprobe', 
+                     '-v','error', 
+                     '-select_streams', 'v:0', 
+                     '-show_entries', 'stream=width,height',
+                     '-of','csv=s=,:nk=0:p=0', 
+                     str(fl)], 
+                    stdout=sp.PIPE, stderr=sp.PIPE)
+            
+            # Get CSV response
+            cprocess_out = cprocess.communicate()[0].decode("utf-8").splitlines()
+            vid_dims = [list_to_dict(list(filter(None,re.split('([a-z_]+)=', x)))) for x in cprocess_out][0]
+            
             # Resample ; TODO
+            # print(ass_ress, sub_settings, vid_dims)
 
 if __name__ == "__main__":
     """ Main """
