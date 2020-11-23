@@ -5,6 +5,10 @@
 # pycache
 src/__pycache__
 
+# pylint
+.pylind.d
+src/.pylind.d
+
 # exclude tests files
 input/*
 output/*
