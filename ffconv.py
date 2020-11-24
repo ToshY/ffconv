@@ -640,8 +640,8 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
     # Start conversion
     print(f"\r\n> FFmpeg conversion running ...")
     cprocess = sp.Popen(ffmpeg_cmd, stdout=sp.PIPE)
-    streamdata = child.communicate()[0]
-    return_code = child.returncode
+    data = cprocess.communicate()[0]
+    return_code = data.returncode
     print(f"\r\n> FFmpeg conversion complete!")
 
     if return_code != 0:
@@ -689,8 +689,8 @@ def main():
     # Input arguments
     user_args, original_input, extension = cli_args()
     
+    # FFprobe
     for x, b in user_args.items():
-        # Run FFprobe
         mp = []
         for y, fl in enumerate(b['input']):
             # Check if first/last item for reporting
@@ -714,7 +714,10 @@ def main():
             
         b['stream_mapping'] = mp
         
-        # Start FFmpeg conversion for this batch
+    
+    # FFmpeg
+    # for x, b in user_args.items():  
+        # Start FFmpeg conversion for batches; TODO take out of probe loop
         for z, flc in enumerate(b['input']):
             # Check if first/last item for reporting
             if flc == b['input'][0]:
@@ -734,9 +737,6 @@ def main():
                 original_input[int(x)],
                 m
             )        
-        
-        # Add mapping
-        b['stream_mapping'] = mp
     
     return user_args.items()
 
