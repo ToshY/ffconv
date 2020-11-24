@@ -628,7 +628,7 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
     s_map = 'subtitles=\'' + lit_file + '\':si=' + str(mapping['s'])
     
     # FFmpeg command
-    ffmpeg_cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(input_file),
+    ffmpeg_cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'quiet', '-y', '-i', str(input_file),
                  '-metadata', 'title=' + input_file.stem,
                  '-map', v_map, '-map', a_map, '-filter_complex', s_map] + v_data + a_data + \
                  ['-movflags', 'faststart', output_file]
@@ -638,12 +638,11 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
     print(f"{tc.GREEN}{' '.join(ffmpeg_cmd)}{tc.NC}")
 
     # Start process; stdin=sp.PIPE breaks with "OSError: [Errno 9] Bad file descriptor" probably due to FFmpeg
-    print(f">> FFmpeg conversion running ...")
-    cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE)
-    print(f">> FFmpeg conversion completed!")
-    
-    # The simulate loading was removed due to it making the conversion 1.5-2 times longer to complete
-    return_code = child.poll()
+    cprocess = sp.Popen(ffmpeg_cmd)
+        
+    # Animate process in terminal
+    SL = SimulateLoading("FFmpeg {}".format(input_file.name))
+    return_code = SL.check_probe(cprocess) 
 
     if return_code != 0:
         raise Exception(f"{tc.RED}FFmpeg returned exit code `{return_code}`.{tc.NC}")
