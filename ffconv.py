@@ -639,8 +639,9 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
 
     # Start conversion
     print(f"\r\n> FFmpeg conversion running ...")
-    cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE)
-    return_code = cprocess.poll()
+    cprocess = sp.Popen(ffmpeg_cmd, stdout=sp.PIPE)
+    streamdata = child.communicate()[0]
+    return_code = child.returncode
     print(f"\r\n> FFmpeg conversion complete!")
 
     if return_code != 0:
