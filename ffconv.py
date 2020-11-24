@@ -638,10 +638,10 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
     print(f"{tc.GREEN}{' '.join(ffmpeg_cmd)}{tc.NC}")
 
     # Start conversion
-    print(f"\r\n FFmpeg conversion running ...")
+    print(f"\r\n> FFmpeg conversion running ...")
     cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE)
     return_code = cprocess.poll()
-    print(f"\r\n FFmpeg conversion complete!")
+    print(f"\r\n> FFmpeg conversion complete!")
 
     if return_code != 0:
         raise Exception(f"{tc.RED}FFmpeg returned exit code `{return_code}`.{tc.NC}")
