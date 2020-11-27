@@ -34,6 +34,7 @@ class DirCheck(argparse.Action):
                        all_values.append({p:'file'}) 
                 else:
                     if not p.is_dir():
+                        # TODO; create new dir if not found automatically
                         raise FileNotFoundError(f"{tc.RED}The specificed path `{str(p)}` does not exist.{tc.NC}")
                     else:
                         all_values.append({p:'directory'})
@@ -638,11 +639,10 @@ def convert_file(input_file, output_dir, output_ext, mapping, video_preset_data,
     print(f"{tc.GREEN}{' '.join(ffmpeg_cmd)}{tc.NC}")
 
     # Start conversion
-    print(f"\r\n> FFmpeg conversion running ...")
-    cprocess = sp.Popen(ffmpeg_cmd, stdout=sp.PIPE)
-    data = cprocess.communicate()[0]
-    return_code = data.returncode
-    print(f"\r\n> FFmpeg conversion complete!")
+    print(f"\r\n> FFmpeg conversion {tc.BLUE}running ...{tc.NC}")
+    cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    return_code = cprocess.returncode
+    print(f"> FFmpeg conversion {tc.GREEN}complete{tc.NC}!\r\n")
 
     if return_code != 0:
         raise Exception(f"{tc.RED}FFmpeg returned exit code `{return_code}`.{tc.NC}")
@@ -691,6 +691,7 @@ def main():
     
     # FFprobe
     for x, b in user_args.items():
+        bn = []
         mp = []
         for y, fl in enumerate(b['input']):
             # Check if first/last item for reporting
@@ -712,30 +713,25 @@ def main():
             # Append mapping
             mp.append(mapping)
             
+            # First in batch
+            bn.append(m)
+            
+        b['nr_in_batch'] = bn
         b['stream_mapping'] = mp
-        
     
     # FFmpeg
-    # for x, b in user_args.items():  
-        # Start FFmpeg conversion for batches; TODO take out of probe loop
+    for x, b in user_args.items():  
         for z, flc in enumerate(b['input']):
-            # Check if first/last item for reporting
-            if flc == b['input'][0]:
-                m = 0
-            elif flc == b['input'][-1]:
-                m = 1
-            else:
-                m = None
-            
+            # Check if first/last item for reporting            
             convert_file(
                 flc, 
                 b['output'][z], 
                 extension, 
                 b['stream_mapping'][z], 
-                b['video_preset'][z],
-                b['audio_preset'][z],
+                b['video_preset'],
+                b['audio_preset'],
                 original_input[int(x)],
-                m
+                b['nr_in_batch'][z]
             )        
     
     return user_args.items()
