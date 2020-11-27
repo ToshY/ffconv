@@ -261,8 +261,7 @@ def check_args(inputs, outputs, vpresets, apresets):
         else:
             if len_vpresets == 0:
                 video_data = vdata
-                if ptype == 'directory':
-                    video_data = [video_data for x in range(len(all_files))]
+                video_data = [video_data for x in range(len(all_files))]
             else:
                 video_data = vdata[0]
                 vdata.pop(0)
@@ -276,8 +275,7 @@ def check_args(inputs, outputs, vpresets, apresets):
         else:
             if len_apresets == 0:
                 audio_data = adata
-                if ptype == 'directory':
-                    audio_data = [audio_data for x in range(len(all_files))]
+                audio_data = [audio_data for x in range(len(all_files))]
             else:
                 audio_data = adata[0]
                 adata.pop(0)
@@ -722,14 +720,15 @@ def main():
     # FFmpeg
     for x, b in user_args.items():  
         for z, flc in enumerate(b['input']):
+            print(b['audio_preset'][z])
             # Check if first/last item for reporting            
             convert_file(
                 flc, 
                 b['output'][z], 
                 extension, 
                 b['stream_mapping'][z], 
-                b['video_preset'],
-                b['audio_preset'],
+                b['video_preset'][z],
+                b['audio_preset'][z],
                 original_input[int(x)],
                 b['nr_in_batch'][z]
             )        
