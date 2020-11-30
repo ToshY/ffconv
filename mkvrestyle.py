@@ -11,7 +11,6 @@ python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.
 """
 
 import os
-import sys
 import re
 import argparse
 import mimetypes
@@ -19,14 +18,11 @@ import json
 import pyfiglet
 import subprocess as sp
 import functools as fc
-from contextlib import redirect_stderr
 from operator import itemgetter
 from pathlib import Path
-from contextlib import redirect_stderr
-from fontTools import ttLib
-from pymediainfo import MediaInfo
 from src.simulate import SimulateLoading
-from src.colours import TextColours as tc
+from src.fonts import FontFinder
+from rich import print
 
 
 class DirCheck(argparse.Action):
@@ -36,7 +32,7 @@ class DirCheck(argparse.Action):
             p = Path(fl).resolve()
             if not p.exists():
                 raise FileNotFoundError(
-                    f"{tc.RED}The specificed path `{fl}` does not exist.{tc.NC}"
+                    f"[red]The specificed path `{fl}` does not exist.[/red]"
                 )
             if p.is_file():
                 all_values.append({p: "file"})
@@ -54,7 +50,7 @@ class ExtCheck(argparse.Action):
         mime_output = mimetypes.guess_type(ext_check)[0]
         if "video" not in mime_output:
             raise ValueError(
-                f"{tc.RED}The specificed output extension `{stripped_ext}` is not a valid video extension.{tc.NC}"
+                f"[red]The specificed output extension `{stripped_ext}` is not a valid video extension.[/red]"
             )
         setattr(args, self.dest, {"extension": stripped_ext})
 
@@ -63,7 +59,7 @@ def cli_banner(banner_font="isometric3", banner_width=200):
     banner = pyfiglet.figlet_format(
         Path(__file__).stem, font=banner_font, width=banner_width
     )
-    print(f"{tc.CYAN}{banner}{tc.NC}")
+    print(f"[magenta]{banner}[/magenta]")
 
 
 def cli_args():
@@ -163,14 +159,14 @@ def check_args(inputs, outputs, spresets, overwrites):
     if len_inputs != len_outputs:
         if len_outputs != 1:
             raise Exception(
-                f"{tc.RED}Amount of input arguments ({len_inputs}) does not equal the amount of output arguments ({len_outputs})."
+                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of output arguments ({len_outputs}).[/red]"
             )
 
     len_spresets = len(spresets)
     if len_spresets != 1:
         if len_inputs != len_spresets:
             raise Exception(
-                f"{tc.RED}Amount of input arguments ({len_inputs}) does not equal the amount of subtitle preset arguments ({len_spresets})."
+                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of subtitle preset arguments ({len_spresets}).[/red]"
             )
 
         sdata = []
@@ -183,7 +179,7 @@ def check_args(inputs, outputs, spresets, overwrites):
     if len_overwrites != 1:
         if len_inputs != len_overwrites:
             raise Exception(
-                f"{tc.RED}Amount of input arguments ({len_inputs}) does not equal the amount of overwritable arguments ({len_overwrites})."
+                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of overwritable arguments ({len_overwrites}).[/red]"
             )
 
         odata = []
@@ -221,10 +217,10 @@ def check_args(inputs, outputs, spresets, overwrites):
                         -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
                     """
                     raise Exception(
-                        f"{tc.RED}The path {tc.CYAN}`{str(cpath)}`{tc.NC} {tc.RED}contains"
-                        f" {tc.CYAN}`{len_all_files_in_batch}`{tc.NC} {tc.RED}files but only"
-                        f" {tc.CYAN}`{len_outputs}`{tc.NC}"
-                        f" {tc.RED}output filename(s) was/were specified.{tc.NC}"
+                        f"[red]The path [cyan]`{str(cpath)}`[/cyan] [red]contains"
+                        f" [cyan]`{len_all_files_in_batch}`[/cyan] [red]files but only"
+                        f" [cyan]`{len_outputs}`[/cyan]"
+                        f" [red]output filename(s) was/were specified.[/red]"
                     )
                 else:
                     output_files = [outputs[0] for x in range(len(all_files))]
@@ -448,22 +444,27 @@ def extract_subsnfonts(input_file, save_loc):
 
     # MKVextract subtitle track
     mkv_subs = ["mkvextract", "tracks", input_file_str] + ["2:" + str(ass_track_path)]
-    sp.run(mkv_subs, capture_output=True)
+    mkv_subs_output = sp.check_output(mkv_subs)
 
     # To export fonts
-    exp_font_list, font_files_loc = export_fonts_list(attachments, save_loc)
+    FF = FontFinder()
 
-    # MKVextract attachments
-    if exp_font_list:
-        mkv_attachments = ["mkvextract", "attachments", input_file_str] + exp_font_list
-        sp.run(mkv_attachments, capture_output=True)
+    # Get font names
+    available_fonts = FF.fonts
 
-        # Get font names
-        fns = [get_font_name(el) for el in font_files_loc]
+    if attachments:
+        font_files, font_files_extract = export_fonts_list(attachments, save_loc)
+    
+        # MKVextract attachments
+        mkv_attachments = ["mkvextract", "attachments", input_file_str] + font_files_extract
+        mkv_attachments_output = sp.check_output(mkv_attachments)
+        
+        # Get current fonts
+        font_names = [FF.font_info_by_file(el) for el in font_files]
 
-        return [ass_track_name, ass_track_path], fns
+        return [ass_track_name, ass_track_path, available_fonts], [font_files, font_names]
 
-    return [ass_track_name, ass_track_path], []
+    return [ass_track_name, ass_track_path, available_fonts], []
 
 
 def subs_mimetype(codec_id):
@@ -476,30 +477,13 @@ def subs_mimetype(codec_id):
 
 
 def export_fonts_list(attachments, save_loc):
-    ex_args = []
     font_files = []
+    font_files_extract = []
     for el in attachments:
         fl = os.path.join(save_loc, el["file_name"])
-        font_files.append(fl)
-        ex_args.append("{}:{}".format(el["id"], fl))
-
-    return ex_args, font_files
-
-
-def get_font_name(font_path):
-    font = ttLib.TTFont(font_path, ignoreDecompileErrors=True)
-    with redirect_stderr(None):
-        names = font["name"].names
-
-    details = {}
-    for x in names:
-        if x.langID == 0 or x.langID == 1033:
-            try:
-                details[x.nameID] = x.toUnicode()
-            except UnicodeDecodeError:
-                details[x.nameID] = x.string.decode(errors="ignore")
-
-    return {"name": details[4], "family": details[1], "style": details[2]}
+        font_files_extract.append("{}:{}".format(el["id"], fl))
+        
+    return font_files, font_files_extract
 
 
 def cwd():
@@ -615,5 +599,5 @@ if __name__ == "__main__":
         resl = main()
         # print(resl)
     except KeyboardInterrupt:
-        print(f"\r\n\r\n> {tc.RED}Execution cancelled by user{tc.NC}")
+        print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         pass

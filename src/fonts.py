@@ -107,7 +107,7 @@ class FontFinder:
             initial_fonts.append(
                 {
                     **{"file_path": file_path, "file_name": file_name},
-                    **self._font_info_by_file(file_path),
+                    **self.font_info_by_file(file_path),
                 }
             )
 
@@ -116,7 +116,7 @@ class FontFinder:
 
         return self.fonts
 
-    def _font_info_by_file(self, file_path: pt) -> dict:
+    def font_info_by_file(self, file_path: pt) -> dict:
         """
         Get font info by file.
 
@@ -143,12 +143,15 @@ class FontFinder:
                 except UnicodeDecodeError:
                     details[name.nameID] = name.string.decode(errors="ignore")
                 continue
-
-        return {
-            "font_name": details[4],
-            "font_family": details[1],
-            "font_style": details[2],
-        }
+        
+        if details:
+            return {
+                "font_name": details[4],
+                "font_family": details[1],
+                "font_style": details[2],
+            }
+        
+        return details
 
     def _fonts_on_system(self) -> list:
         """
