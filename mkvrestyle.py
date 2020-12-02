@@ -12,6 +12,7 @@ python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.
 
 import os
 import re
+import sys
 import argparse
 import mimetypes
 import json
@@ -23,7 +24,9 @@ from pathlib import Path
 from src.simulate import SimulateLoading
 from src.fonts import FontFinder
 from rich import print
-
+from rich.prompt import IntPrompt
+from rich.console import Console
+from rich.table import Table
 
 class DirCheck(argparse.Action):
     def __call__(self, parser, args, values, option_string=None):
@@ -59,7 +62,7 @@ def cli_banner(banner_font="isometric3", banner_width=200):
     banner = pyfiglet.figlet_format(
         Path(__file__).stem, font=banner_font, width=banner_width
     )
-    print(f"[magenta]{banner}[/magenta]")
+    print(f"[bold magenta]{banner}[/bold magenta]")
 
 
 def cli_args():
@@ -272,7 +275,21 @@ def check_args(inputs, outputs, spresets, overwrites):
 
     return batch
 
-
+def print_subtitle_streams_options(tracks):
+    
+    table = Table(show_header=True, header_style="bold cyan")
+    
+    # Header
+    for key in tracks[0].keys():
+        table.add_column(key.capitalize())
+    
+    # Rows
+    for track in tracks:
+        table.add_row(*[str(val) for val in list(track.values())])
+    
+    console = Console()
+    console.print(table)
+    
 def files_in_dir(file_path, file_types=["*.mkv"]):
     """
     Get the files in the specified directory.
@@ -406,6 +423,16 @@ def get_lines_per_type(my_lines, split_at=["Format: "]):
         if any(s.startswith(xs) for xs in split_at)
     ]
 
+def prepare_track_info(file,index,codec,lang):
+    return (
+        file.stem
+        + "_track"
+        + str(index)
+        + "_"
+        + lang
+        + subs_mimetype(codec)
+    )
+
 
 def additional_info():
     return {"WrapStyle": "0", "ScaledBorderAndShadow": "yes", "YCbCr Matrix": "TV.709"}
@@ -432,15 +459,43 @@ def extract_subsnfonts(input_file, save_loc):
     attachments = mkvout["attachments"]
     tracks = mkvout["tracks"]
 
-    ass_subs = next(item for item in tracks if item["codec"] == "SubStationAlpha")
-    ass_subs_idx = ass_subs["id"]
-    ass_track_name = (
-        input_file.stem
-        + "_track"
-        + str(ass_subs_idx)
-        + subs_mimetype(ass_subs["properties"]["codec_id"])
-    )
-    ass_track_path = Path(os.path.join(save_loc, ass_track_name))
+    ass_subs = [
+        {
+        'index':sub['id'],
+         'codec':sub['properties']['codec_id'],
+         'language':sub['properties']['language'],
+         'title':sub['properties']['track_name'],
+         'save_file':prepare_track_info(
+             input_file, sub['id'],
+             sub['properties']['codec_id'],
+             sub['properties']['language']
+        )
+         }
+        for sub in tracks if sub["type"] == "subtitles"
+    ]
+    
+    selected_subs = ass_subs[0]['index']
+    
+    # Request user input for stream type
+    if len(ass_subs) > 1:
+        print(f"\r\n> Multiple subtitle streams detected")
+
+        # Print the options
+        print_subtitle_streams_options(ass_subs)
+        allowed = [str(sub['index']) for sub in ass_subs]
+        
+        # Request user input
+        selected_subs = IntPrompt.ask(
+            "\r\n# Please specify the subtitle index to use: ",
+            choices=allowed,
+            default=selected_subs,
+            show_choices=True,
+            show_default=True
+        )
+        print(f"\r> Stream index [green]`{selected_subs}`[/green] selected!")
+
+    selected_subs = next(sub for sub in ass_subs if int(sub['index']) == int(selected_subs))
+    ass_track_path = Path(os.path.join(save_loc, selected_subs['save_file']))
 
     # MKVextract subtitle track
     mkv_subs = ["mkvextract", "tracks", input_file_str] + ["2:" + str(ass_track_path)]
@@ -462,9 +517,9 @@ def extract_subsnfonts(input_file, save_loc):
         # Get current fonts
         font_names = [FF.font_info_by_file(el) for el in font_files]
 
-        return [ass_track_name, ass_track_path, available_fonts], [font_files, font_names]
+        return [selected_subs['save_file'], ass_track_path, available_fonts], [font_files, font_names]
 
-    return [ass_track_name, ass_track_path, available_fonts], []
+    return [selected_subs['save_file'], ass_track_path, available_fonts], []
 
 
 def subs_mimetype(codec_id):
@@ -512,7 +567,7 @@ def main():
                 m = 1
             else:
                 m = None
-
+                
             # Prepare attachments folder path
             fl_attachments_folder = Path(str(fl.with_suffix("")) + "_attachments")
 
@@ -556,32 +611,26 @@ def main():
 
             # User styling settings
             sub_settings = b["subtitle_preset"]
-
-            # Get video dimensions
-            cprocess = sp.Popen(
-                [
+            
+            ffprobe_cmd = [
                     "ffprobe",
                     "-v",
                     "error",
                     "-select_streams",
-                    "v:0",
+                    "v",
                     "-show_entries",
-                    "stream=width,height",
+                    "stream={}".format(','.join(["width","height"])),
                     "-of",
-                    "csv=s=,:nk=0:p=0",
+                    "json",
                     str(fl),
-                ],
-                stdout=sp.PIPE,
-                stderr=sp.PIPE,
-            )
+                ]
 
-            # Get CSV response
-            cprocess_out = cprocess.communicate()[0].decode("utf-8").splitlines()
-            vid_dims = [
-                list_to_dict(list(filter(None, re.split("([a-z_]+)=", x))))
-                for x in cprocess_out
-            ][0]
+            # Get video dimensions
+            cprocess = sp.run(ffprobe_cmd, capture_output=True)
 
+            # Json output
+            ffdims = json.loads(cprocess.stdout)['streams'][0]
+            
             # Resample ; TODO
             # print(ass_ress, sub_settings, vid_dims)
 
@@ -597,7 +646,6 @@ if __name__ == "__main__":
     # Stop execution at keyboard input
     try:
         resl = main()
-        # print(resl)
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         pass
