@@ -561,6 +561,13 @@ def probe_file(input_file, idx, original_batch, mark, extra_tags=['title']):
         probe_output[s]['streams'] = stream_output
         probe_output[s]['count'] = len(probe_output[s]['streams'])
         
+        # Temporary fix where jpegs are recognized in video stream instead of attachment, maybe use mkvmerge identify?
+        if s == 'v':
+            for x, dct in enumerate(probe_output[s]['streams']):
+                if "jpeg" in dct['codec_name']:
+                    del probe_output[s]['streams'][x]
+                    probe_output[s]['count'] -= 1
+
     # Check if file has consistent streams
     check_streams_order(probe_output)
     
