@@ -28,6 +28,7 @@ from rich.prompt import IntPrompt
 from rich.console import Console
 from rich.table import Table
 
+
 class DirCheck(argparse.Action):
     def __call__(self, parser, args, values, option_string=None):
         all_values = []
@@ -275,21 +276,23 @@ def check_args(inputs, outputs, spresets, overwrites):
 
     return batch
 
+
 def print_subtitle_streams_options(tracks):
-    
+
     table = Table(show_header=True, header_style="bold cyan")
-    
+
     # Header
     for key in tracks[0].keys():
         table.add_column(key.capitalize())
-    
+
     # Rows
     for track in tracks:
         table.add_row(*[str(val) for val in list(track.values())])
-    
+
     console = Console()
     console.print(table)
-    
+
+
 def files_in_dir(file_path, file_types=["*.mkv"]):
     """
     Get the files in the specified directory.
@@ -423,15 +426,9 @@ def get_lines_per_type(my_lines, split_at=["Format: "]):
         if any(s.startswith(xs) for xs in split_at)
     ]
 
-def prepare_track_info(file,index,codec,lang):
-    return (
-        file.stem
-        + "_track"
-        + str(index)
-        + "_"
-        + lang
-        + subs_mimetype(codec)
-    )
+
+def prepare_track_info(file, index, codec, lang):
+    return file.stem + "_track" + str(index) + "_" + lang + subs_mimetype(codec)
 
 
 def additional_info():
@@ -461,41 +458,45 @@ def extract_subsnfonts(input_file, save_loc):
 
     ass_subs = [
         {
-        'index':sub['id'],
-         'codec':sub['properties']['codec_id'],
-         'language':sub['properties']['language'],
-         'title':sub['properties']['track_name'],
-         'save_file':prepare_track_info(
-             input_file, sub['id'],
-             sub['properties']['codec_id'],
-             sub['properties']['language']
-        )
-         }
-        for sub in tracks if sub["type"] == "subtitles"
+            "index": sub["id"],
+            "codec": sub["properties"]["codec_id"],
+            "language": sub["properties"]["language"],
+            "title": sub["properties"]["track_name"],
+            "save_file": prepare_track_info(
+                input_file,
+                sub["id"],
+                sub["properties"]["codec_id"],
+                sub["properties"]["language"],
+            ),
+        }
+        for sub in tracks
+        if sub["type"] == "subtitles"
     ]
-    
-    selected_subs = ass_subs[0]['index']
-    
+
+    selected_subs = ass_subs[0]["index"]
+
     # Request user input for stream type
     if len(ass_subs) > 1:
         print(f"\r\n> Multiple subtitle streams detected")
 
         # Print the options
         print_subtitle_streams_options(ass_subs)
-        allowed = [str(sub['index']) for sub in ass_subs]
-        
+        allowed = [str(sub["index"]) for sub in ass_subs]
+
         # Request user input
         selected_subs = IntPrompt.ask(
             "\r\n# Please specify the subtitle index to use: ",
             choices=allowed,
             default=selected_subs,
             show_choices=True,
-            show_default=True
+            show_default=True,
         )
         print(f"\r> Stream index [green]`{selected_subs}`[/green] selected!")
 
-    selected_subs = next(sub for sub in ass_subs if int(sub['index']) == int(selected_subs))
-    ass_track_path = Path(os.path.join(save_loc, selected_subs['save_file']))
+    selected_subs = next(
+        sub for sub in ass_subs if int(sub["index"]) == int(selected_subs)
+    )
+    ass_track_path = Path(os.path.join(save_loc, selected_subs["save_file"]))
 
     # MKVextract subtitle track
     mkv_subs = ["mkvextract", "tracks", input_file_str] + ["2:" + str(ass_track_path)]
@@ -509,17 +510,24 @@ def extract_subsnfonts(input_file, save_loc):
 
     if attachments:
         font_files, font_files_extract = export_fonts_list(attachments, save_loc)
-    
+
         # MKVextract attachments
-        mkv_attachments = ["mkvextract", "attachments", input_file_str] + font_files_extract
+        mkv_attachments = [
+            "mkvextract",
+            "attachments",
+            input_file_str,
+        ] + font_files_extract
         mkv_attachments_output = sp.check_output(mkv_attachments)
-        
+
         # Get current fonts
         font_names = [FF.font_info_by_file(el) for el in font_files]
 
-        return [selected_subs['save_file'], ass_track_path, available_fonts], [font_files, font_names]
+        return (
+            [selected_subs["save_file"], ass_track_path, available_fonts],
+            [font_files, font_names],
+        )
 
-    return [selected_subs['save_file'], ass_track_path, available_fonts], []
+    return [selected_subs["save_file"], ass_track_path, available_fonts], []
 
 
 def subs_mimetype(codec_id):
@@ -537,7 +545,7 @@ def export_fonts_list(attachments, save_loc):
     for el in attachments:
         fl = os.path.join(save_loc, el["file_name"])
         font_files_extract.append("{}:{}".format(el["id"], fl))
-        
+
     return font_files, font_files_extract
 
 
@@ -567,7 +575,7 @@ def main():
                 m = 1
             else:
                 m = None
-                
+
             # Prepare attachments folder path
             fl_attachments_folder = Path(str(fl.with_suffix("")) + "_attachments")
 
@@ -611,26 +619,26 @@ def main():
 
             # User styling settings
             sub_settings = b["subtitle_preset"]
-            
+
             ffprobe_cmd = [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-select_streams",
-                    "v",
-                    "-show_entries",
-                    "stream={}".format(','.join(["width","height"])),
-                    "-of",
-                    "json",
-                    str(fl),
-                ]
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v",
+                "-show_entries",
+                "stream={}".format(",".join(["width", "height"])),
+                "-of",
+                "json",
+                str(fl),
+            ]
 
             # Get video dimensions
             cprocess = sp.run(ffprobe_cmd, capture_output=True)
 
             # Json output
-            ffdims = json.loads(cprocess.stdout)['streams'][0]
-            
+            ffdims = json.loads(cprocess.stdout)["streams"][0]
+
             # Resample ; TODO
             # print(ass_ress, sub_settings, vid_dims)
 
