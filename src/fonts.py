@@ -143,14 +143,14 @@ class FontFinder:
                 except UnicodeDecodeError:
                     details[name.nameID] = name.string.decode(errors="ignore")
                 continue
-        
+
         if details:
             return {
                 "font_name": details[4],
                 "font_family": details[1],
                 "font_style": details[2],
             }
-        
+
         return details
 
     def _fonts_on_system(self) -> list:
