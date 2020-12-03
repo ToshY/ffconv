@@ -727,7 +727,6 @@ def main():
     # FFmpeg
     for x, b in user_args.items():  
         for z, flc in enumerate(b['input']):
-            print(b['audio_preset'][z])
             # Check if first/last item for reporting            
             convert_file(
                 flc, 
