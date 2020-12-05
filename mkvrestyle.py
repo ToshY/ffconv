@@ -105,6 +105,14 @@ def cli_args():
         help="Path to output directory",
     )
     parser.add_argument(
+        "-ss",
+        "--stream_select",
+        type=str,
+        required=False,
+        nargs="+",
+        help="Stream select by id or 3 letter language code",
+    )
+    parser.add_argument(
         "-sp",
         "--subtitle_preset",
         type=str,
@@ -125,13 +133,17 @@ def cli_args():
 
     # Check args count
     user_args = check_args(
-        args.input, args.output, args.subtitle_preset, args.overwrite
+        args.input,
+        args.output,
+        args.stream_select,
+        args.subtitle_preset,
+        args.overwrite,
     )
 
     return user_args
 
 
-def check_args(inputs, outputs, spresets, overwrites):
+def check_args(inputs, outputs, stream_select, spresets, overwrites):
     """
     Check the amount of input arguments, outputs and presets.
 
@@ -141,6 +153,8 @@ def check_args(inputs, outputs, spresets, overwrites):
         Input argument(s).
     outputs : list
         Output arugment(s).
+    stream_select: list
+        Subtitle stream select argument(s)
     vpresets : list
         Video preset argument(s).
     apresets : list
@@ -166,6 +180,23 @@ def check_args(inputs, outputs, spresets, overwrites):
                 f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of output arguments ({len_outputs}).[/red]"
             )
 
+    if stream_select is not None:
+        len_stream_select = len(stream_select)
+        if len_stream_select != 1:
+            if len_inputs != len_stream_select:
+                raise Exception(
+                    f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of subtitle stream select arguments ({len_stream_select}).[/red]"
+                )
+
+            ssdata = []
+            for op in overwrites:
+                ssdata.append(list(op.keys())[0])
+        else:
+            ssdata = [stream_select[0]]
+    else:
+        len_stream_select = 0
+        ssdata = ['-1']
+
     len_spresets = len(spresets)
     if len_spresets != 1:
         if len_inputs != len_spresets:
@@ -183,7 +214,7 @@ def check_args(inputs, outputs, spresets, overwrites):
     if len_overwrites != 1:
         if len_inputs != len_overwrites:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of overwritable arguments ({len_overwrites}).[/red]"
+                f"[red]Amount of input arguments ({len_inputs}) does not equal amount of overwritable arguments ({len_overwrites}).[/red]"
             )
 
         odata = []
@@ -238,6 +269,27 @@ def check_args(inputs, outputs, spresets, overwrites):
                 output_files = [output_files for x in range(len(all_files))]
 
         if len_spresets == 1:
+            subtitle_select_stream = ssdata
+            if ptype == "directory":
+                subtitle_select_stream = [
+                    subtitle_select_stream for x in range(len(all_files))
+                ]
+        else:
+            if len_spresets == 0:
+                subtitle_select_stream = ssdata
+                if ptype == "directory":
+                    subtitle_select_stream = [
+                        subtitle_select_stream for x in range(len(all_files))
+                    ]
+            else:
+                subtitle_select_stream = ssdata[0]
+                ssdata.pop(0)
+                if ptype == "directory":
+                    subtitle_select_stream = [
+                        subtitle_select_stream for x in range(len(all_files))
+                    ]
+
+        if len_spresets == 1:
             subtitle_data = sdata
             if ptype == "directory":
                 subtitle_data = [subtitle_data for x in range(len(all_files))]
@@ -270,6 +322,7 @@ def check_args(inputs, outputs, spresets, overwrites):
         batch[str(i)] = {
             "input": all_files,
             "output": output_files,
+            "subtitle_stream_select": subtitle_select_stream,
             "subtitle_preset": subtitle_data,
             "overwrite": overwrite_data,
         }
@@ -435,11 +488,11 @@ def additional_info():
     return {"WrapStyle": "0", "ScaledBorderAndShadow": "yes", "YCbCr Matrix": "TV.709"}
 
 
-def extract_subsnfonts(input_file, save_loc):
+def extract_subsnfonts(input_file, save_loc, stream_select):
 
     # file str
     input_file_str = str(input_file)
-
+    
     mkv_cmd = [
         "mkvmerge",
         "--identify",
@@ -472,26 +525,35 @@ def extract_subsnfonts(input_file, save_loc):
         for sub in tracks
         if sub["type"] == "subtitles"
     ]
-
-    selected_subs = ass_subs[0]["index"]
-
-    # Request user input for stream type
-    if len(ass_subs) > 1:
-        print(f"\r\n> Multiple subtitle streams detected")
-
-        # Print the options
-        print_subtitle_streams_options(ass_subs)
-        allowed = [str(sub["index"]) for sub in ass_subs]
-
-        # Request user input
-        selected_subs = IntPrompt.ask(
-            "\r\n# Please specify the subtitle index to use: ",
-            choices=allowed,
-            default=selected_subs,
-            show_choices=True,
-            show_default=True,
-        )
-        print(f"\r> Stream index [green]`{selected_subs}`[/green] selected!")
+    
+    # No user input provided, so identify streams and ask for input
+    if stream_select == '-1':
+        selected_subs = ass_subs[0]["index"]
+        # Request user input for stream type
+        if len(ass_subs) > 1:
+            print(f"\r\n> Multiple subtitle streams detected")
+    
+            # Print the options
+            print_subtitle_streams_options(ass_subs)
+            allowed = [str(sub["index"]) for sub in ass_subs]
+    
+            # Request user input
+            selected_subs = IntPrompt.ask(
+                "\r\n# Please specify the subtitle index to use: ",
+                choices=allowed,
+                default=selected_subs,
+                show_choices=True,
+                show_default=True,
+            )
+            print(f"\r> Stream index [green]`{selected_subs}`[/green] selected!")
+    else:
+        if stream_select.isnumeric():
+            selected_subs = stream_select
+        else:
+            # Find index for language property; TODO make dynamic property
+            selected_subs = next(
+                sub['index'] for sub in ass_subs if sub["language"] == stream_select
+            )
 
     selected_subs = next(
         sub for sub in ass_subs if int(sub["index"]) == int(selected_subs)
@@ -550,9 +612,9 @@ def export_fonts_list(attachments, save_loc):
 
 
 def cwd():
-    """ 
+    """
     Get current working directory.
-    
+
     Returns
     -------
     Path
@@ -583,7 +645,9 @@ def main():
             fl_attachments_folder.mkdir(parents=True, exist_ok=True)
 
             # Extract subs + fonts
-            ass, fonts = extract_subsnfonts(fl, fl_attachments_folder)
+            ass, fonts = extract_subsnfonts(
+                fl, fl_attachments_folder, b['subtitle_stream_select'][y]
+            )
 
             # Read subs
             lines = read_subs(ass[1])
