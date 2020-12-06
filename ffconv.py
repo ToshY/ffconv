@@ -460,8 +460,8 @@ def stream_user_input(ffprobe_result):
                 {
                     "id": cs["id"],
                     "codec": cs["properties"]["codec_id"],
-                    "language": (cs["properties"]["language"] if cs["properties"] is not None else ''),
-                    "title": (cs["properties"]["track_name"] if cs["properties"] is not None else ''),
+                    "language": (cs["properties"]["language"] if 'language' in cs["properties"] else ''),
+                    "title": (cs["properties"]["track_name"] if 'track_name' in cs["properties"] else ''),
                 }
                 for cs in st["streams"]
             ]
