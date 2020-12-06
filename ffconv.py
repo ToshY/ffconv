@@ -52,8 +52,7 @@ class DirCheck(argparse.Action):
                 else:
                     if not p.is_dir():
                         p.mkdir()
-                    else:
-                        all_values.append({p: "directory"})
+                    all_values.append({p: "directory"})
             else:
                 if not p.exists():
                     raise FileNotFoundError(
@@ -196,8 +195,8 @@ def check_args(inputs, outputs, vpresets, apresets):
     if len_inputs != len_outputs:
         if len_outputs != 1:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) \
-                does not equal the amount of output arguments ({len_outputs})."
+                f"[red]Amount of input arguments ({len_inputs}) "
+                 "does not equal the amount of output arguments ({len_outputs})."
             )
 
     if vpresets is not None:
@@ -205,8 +204,8 @@ def check_args(inputs, outputs, vpresets, apresets):
         if len_vpresets != 1:
             if len_inputs != len_vpresets:
                 raise Exception(
-                    f"[red]Amount of input arguments ({len_inputs}) \
-                    does not equal the amount of video preset arguments ({len_vpresets})."
+                    f"[red]Amount of input arguments ({len_inputs}) "
+                     "does not equal the amount of video preset arguments ({len_vpresets})."
                 )
 
             vdata = []
@@ -241,8 +240,8 @@ def check_args(inputs, outputs, vpresets, apresets):
         if len_apresets != 1:
             if len_inputs != len_apresets:
                 raise Exception(
-                    f"[red]Amount of input arguments ({len_inputs}) \
-                    does not equal the amount of video preset arguments ({len_apresets})."
+                    f"[red]Amount of input arguments ({len_inputs}) "
+                     "does not equal the amount of video preset arguments ({len_apresets})."
                 )
 
             adata = []
