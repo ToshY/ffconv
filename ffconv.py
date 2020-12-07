@@ -27,13 +27,6 @@ from rich import print
 from rich.prompt import IntPrompt
 from rich.console import Console
 from rich.table import Table
-from rich.progress import (
-    Progress,
-    BarColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
-
 
 class DirCheck(argparse.Action):
     def __call__(self, parser, args, values, option_string=None):
@@ -778,35 +771,14 @@ def convert_file(
         + ["-movflags", "faststart", "-progress", "-", output_file]
     )
 
-    print("\r\n> The following FFmpeg will be executed:\r\n")
-    print(f"[green]{' '.join(ffmpeg_cmd)}[/green]\r\n")
-
-    # Start conversion
-    with Progress(
-        "[progress.description]{task.description}",
-        BarColumn(bar_width=None),
-        "[progress.percentage]{task.percentage:>3.1f}%",
-        "•",
-        TimeRemainingColumn(),
-    ) as progress:
-        task = progress.add_task("[cyan]Converting...", total=math.ceil(file_duration))
-        while not progress.finished:
-            process = sp.Popen(
-                ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.STDOUT, universal_newlines=True
-            )
-            prev = [0]
-            rmbr = 5
-            for x, line in enumerate(process.stdout):
-                if x == rmbr:
-                    cdur = round(int(re.search(r"\d+", line).group()) / 1e6)
-                    adv = cdur - prev[-1]
-                    prev.append(cdur)
-                    progress.update(task, advance=adv)
-                    rmbr += 11
-
-        progress.update(task, description="[cyan]Conversion complete!")
-
-    return_code = process.wait()
+    print("> The following FFmpeg will be executed:\r\n")
+    print(f"[green]{' '.join(ffmpeg_cmd)}[/green]")
+    
+    print(f"\r\n> FFmpeg conversion [cyan]running ...[/cyan]")
+    cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    return_code = cprocess.returncode
+    print(f"> FFmpeg conversion [green]complete[/green]!\r\n")
+    
     if return_code != 0:
         raise Exception(f"[red]FFmpeg returned exit code `{return_code}`.[/red]")
 
