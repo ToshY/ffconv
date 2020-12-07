@@ -768,17 +768,17 @@ def convert_file(
         ]
         + v_data
         + a_data
-        + ["-movflags", "faststart", "-progress", "-", output_file]
+        + ["-movflags", "faststart", output_file]
     )
 
     print("> The following FFmpeg will be executed:\r\n")
     print(f"[green]{' '.join(ffmpeg_cmd)}[/green]")
-    
-    print(f"\r\n> FFmpeg conversion [cyan]running ...[/cyan]")
+
+    print(f"\r\n> FFmpeg conversion [cyan]running...[/cyan]", end='\r')
     cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     return_code = cprocess.returncode
-    print(f"> FFmpeg conversion [green]complete[/green]!\r\n")
-    
+    print(f"> FFmpeg conversion [green]completed[/green]!\r\n")
+
     if return_code != 0:
         raise Exception(f"[red]FFmpeg returned exit code `{return_code}`.[/red]")
 
