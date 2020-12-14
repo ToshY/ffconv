@@ -10,74 +10,21 @@ FFconv - Hardcoding MKV to MP4 with FFmpeg
 python ffconv.py -i "./input/" -o "./output/" -e "mp4"
 """
 
-import sys
-import re
 import argparse
-import mimetypes
 import json
-import pyfiglet
 import subprocess as sp
-import functools as fc
-import collections
-import math
 from pathlib import Path
-from src.simulate import SimulateLoading
-from src.colours import TextColours as tc
+from src.banner import cli_banner
+from src.table import table_print_stream_options
+from src.args import FileDirectoryCheck, ExtensionCheck, files_in_dir
+from src.general import (
+    read_json,
+    remove_empty_dict_values,
+    dict_to_list,
+    split_list_of_dicts_by_key,
+)
 from rich import print
 from rich.prompt import IntPrompt
-from rich.console import Console
-from rich.table import Table
-
-class DirCheck(argparse.Action):
-    def __call__(self, parser, args, values, option_string=None):
-        all_values = []
-        for fl in values:
-            p = Path(fl).resolve()
-            if not self.const:
-                if p.suffix:
-                    if not p.parent.is_dir():
-                        raise FileNotFoundError(
-                            f"[red]The parent directory `{str(p.parent)}` "
-                            "for output argument `{str(p)}` does not exist.[/red]"
-                        )
-                    else:
-                        all_values.append({p: "file"})
-                else:
-                    if not p.is_dir():
-                        p.mkdir()
-                    all_values.append({p: "directory"})
-            else:
-                if not p.exists():
-                    raise FileNotFoundError(
-                        f"[red]The specificed path `{fl}` does not exist.[/red]"
-                    )
-                if p.is_file():
-                    all_values.append({p: "file"})
-                else:
-                    all_values.append({p: "directory"})
-
-        setattr(args, self.dest, all_values)
-
-
-class ExtCheck(argparse.Action):
-    def __call__(self, parser, args, values, option_string=None):
-        mimetypes.init()
-        stripped_ext = values.lstrip(".")
-        ext_check = "placeholder." + stripped_ext
-        mime_output = mimetypes.guess_type(ext_check)[0]
-        if "video" not in mime_output:
-            raise ValueError(
-                f"[red]The specificed output extension `{stripped_ext}` "
-                "is not a valid video extension.[/red]"
-            )
-        setattr(args, self.dest, {"extension": stripped_ext})
-
-
-def cli_banner(banner_font="isometric3", banner_width=200):
-    banner = pyfiglet.figlet_format(
-        Path(__file__).stem, font=banner_font, width=banner_width
-    )
-    print(f"[bold magenta]{banner}[/bold magenta]")
 
 
 def cli_args():
@@ -95,9 +42,6 @@ def cli_args():
 
     """
 
-    # Banner
-    cli_banner()
-
     # Arguments
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -105,7 +49,7 @@ def cli_args():
         "--input",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         const=True,
         nargs="+",
         help="Path to input file or directory",
@@ -115,7 +59,7 @@ def cli_args():
         "--output",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         const=False,
         nargs="+",
         help="Path to output directory",
@@ -125,7 +69,7 @@ def cli_args():
         "--extension",
         type=str,
         required=True,
-        action=ExtCheck,
+        action=ExtensionCheck,
         help="Extension for the output files",
     )
     parser.add_argument(
@@ -133,16 +77,16 @@ def cli_args():
         "--video_preset",
         type=str,
         required=False,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to JSON file with FFmpeg video preset options",
     )
     parser.add_argument(
-        "-va",
+        "-ap",
         "--audio_preset",
         type=str,
         required=False,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to JSON file with FFmpeg audio preset options",
     )
@@ -189,7 +133,7 @@ def check_args(inputs, outputs, vpresets, apresets):
         if len_outputs != 1:
             raise Exception(
                 f"[red]Amount of input arguments ({len_inputs}) "
-                 "does not equal the amount of output arguments ({len_outputs})."
+                "does not equal the amount of output arguments ({len_outputs})."
             )
 
     if vpresets is not None:
@@ -198,7 +142,7 @@ def check_args(inputs, outputs, vpresets, apresets):
             if len_inputs != len_vpresets:
                 raise Exception(
                     f"[red]Amount of input arguments ({len_inputs}) "
-                     "does not equal the amount of video preset arguments ({len_vpresets})."
+                    "does not equal the amount of video preset arguments ({len_vpresets})."
                 )
 
             vdata = []
@@ -234,7 +178,7 @@ def check_args(inputs, outputs, vpresets, apresets):
             if len_inputs != len_apresets:
                 raise Exception(
                     f"[red]Amount of input arguments ({len_inputs}) "
-                     "does not equal the amount of video preset arguments ({len_apresets})."
+                    "does not equal the amount of video preset arguments ({len_apresets})."
                 )
 
             adata = []
@@ -272,8 +216,8 @@ def check_args(inputs, outputs, vpresets, apresets):
                     """
                     If a batch contains a directory, and it contains more files than specified outputs, this should
                     throw an exception because it's not possible to create files with the same filename in the same
-                    output directory. The user has 2 options: 
-                    1. Just specify an output directory which leaves the filenames unchanged: 
+                    output directory. The user has 2 options:
+                    1. Just specify an output directory which leaves the filenames unchanged:
                         -o "./output"
                     2. Specify all the files as seperate "batches":
                     -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
@@ -331,22 +275,6 @@ def check_args(inputs, outputs, vpresets, apresets):
         }
 
     return batch
-
-
-def print_streams_options(tracks):
-
-    table = Table(show_header=True, header_style="bold cyan")
-
-    # Header
-    for key in tracks[0].keys():
-        table.add_column(key.capitalize())
-
-    # Rows
-    for track in tracks:
-        table.add_row(*[str(val) for val in list(track.values())])
-
-    console = Console()
-    console.print(table)
 
 
 def check_streams_order(ffprobe_result):
@@ -453,13 +381,21 @@ def stream_user_input(ffprobe_result):
                 {
                     "id": cs["id"],
                     "codec": cs["properties"]["codec_id"],
-                    "language": (cs["properties"]["language"] if 'language' in cs["properties"] else ''),
-                    "title": (cs["properties"]["track_name"] if 'track_name' in cs["properties"] else ''),
+                    "language": (
+                        cs["properties"]["language"]
+                        if "language" in cs["properties"]
+                        else ""
+                    ),
+                    "title": (
+                        cs["properties"]["track_name"]
+                        if "track_name" in cs["properties"]
+                        else ""
+                    ),
                 }
                 for cs in st["streams"]
             ]
 
-            print_streams_options(stream_properties)
+            table_print_stream_options(stream_properties)
             allowed = [str(cs["id"]) for cs in stream_properties]
 
             # Request user input
@@ -483,130 +419,6 @@ def stream_user_input(ffprobe_result):
             stream_map[ty] = int(stream_map[ty]) - stream_sum_count
 
     return stream_map
-
-
-def read_json(input_file):
-    """
-    Read in JSON file.
-
-    Parameters
-    ----------
-    input_file : str
-        The specified input JSON file
-
-    Returns
-    -------
-    data : dictonary
-        The JSON read data
-
-    """
-
-    with open(input_file) as json_file:
-        data = json.load(json_file)
-
-    return data
-
-
-def remove_empty_dict_values(input_dict):
-    """
-    Get keys from dictonary where the values are not empty.
-
-    Parameters
-    ----------
-    input_dict : dict
-        The specified input dictonary.
-
-    Returns
-    -------
-    dict
-        The input dictonary without the keys that have no empty values
-
-    """
-
-    cleared_data = {k: v for k, v in input_dict.items() if v}
-
-    return cleared_data
-
-
-def dict_to_list(input_dict):
-    """
-    Convert dictonary key/values to 1D list
-
-    Parameters
-    ----------
-    input_dict : dict
-        The specified input dictonary
-
-    Returns
-    -------
-    ffmpeg_arglist : list
-        List of key-value arguments
-
-    """
-
-    ffmpeg_arglist = list(fc.reduce(lambda x, y: x + y, input_dict.items()))
-
-    return ffmpeg_arglist
-
-
-def list_to_dict(input_list):
-    """
-    Convert list to key:value pairs
-
-    Parameters
-    ----------
-    input_list : list
-        The specified input list
-
-    Returns
-    -------
-    output_dict : TYPE
-        Dict of key-value pair
-
-    """
-
-    output_dict = dict(zip(input_list[::2], input_list[1::2]))
-
-    return output_dict
-
-
-def split_list_of_dicts_by_key(list_of_dicts, key="codec_type"):
-    """
-    Split list of dictonaries by specified key
-
-    Parameters
-    ----------
-    list_of_dicts : list
-        List of dictonaries.
-    key : string, optional
-        The key to split the list of dictonaries on. The default is 'codec_type'.
-
-    Returns
-    -------
-    result_list : list
-        List of dictonaries splitted by key.
-
-    """
-
-    result = collections.defaultdict(list)
-    keys = []
-    for d in list_of_dicts:
-        result[d[key]].append(d)
-        if d[key] not in keys:
-            keys.append(d[key])
-
-    result_list = list(result.values())
-
-    streams = {k: {"streams": {}, "count": 0} for k in keys}
-    for x, s in enumerate(streams):
-        streams[s]["streams"] = result_list[x]
-        streams[s]["count"] = len(streams[s]["streams"])
-        # for st in streams[s]['streams']:
-        #     if 'properties' in st:
-        #         if 'codec_private_data' in st['properties']:
-        #             st['properties'].pop('codec_private_data', None)
-
-    return streams
 
 
 def probe_file(
@@ -641,7 +453,7 @@ def probe_file(
     main_tags = ["id", "codec_name"]
 
     print(f"> Starting FFprobe for [cyan]`{input_file.name}`[/cyan]")
-    # Probe; changed to MKVmerge idenitfy due to FFprobe identifying cover pictures as video streams
+    # Changed to MKVmerge idenitfy due to FFprobe identifying cover pictures as video streams
     mkvidentify_cmd = [
         "mkvmerge",
         "--identify",
@@ -655,7 +467,15 @@ def probe_file(
     mkvidentify_out = json.loads(mkvidentify_process.stdout)
 
     # Split by codec_type
-    streams = split_list_of_dicts_by_key(mkvidentify_out["tracks"], "type")
+    split_streams, split_keys = split_list_of_dicts_by_key(
+        mkvidentify_out["tracks"], "type"
+    )
+
+    # Rebuild streams & count per codec type
+    streams = {k: {"streams": {}, "count": 0} for k in split_keys}
+    for x, s in enumerate(split_streams):
+        streams[s]["streams"] = split_streams[x]
+        streams[s]["count"] = len(streams[s]["streams"])
 
     # Check if file has consistent streams
     check_streams_order(streams)
@@ -774,7 +594,7 @@ def convert_file(
     print("> The following FFmpeg will be executed:\r\n")
     print(f"[green]{' '.join(ffmpeg_cmd)}[/green]")
 
-    print(f"\r\n> FFmpeg conversion [cyan]running...[/cyan]", end='\r')
+    print(f"\r\n> FFmpeg conversion [cyan]running...[/cyan]", end="\r")
     cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     return_code = cprocess.returncode
     print(f"> FFmpeg conversion [green]completed[/green]!\r\n")
@@ -786,41 +606,6 @@ def convert_file(
         print(f"\r\n> FFmpeg batch complete for [cyan]`{original_batch_name}`[/cyan]")
 
     return None
-
-
-def files_in_dir(file_path, file_types=["*.mkv"]):
-    """
-    Get the files in the specified directory.
-
-    Parameters
-    ----------
-    file_path : str
-        Path of input directory.
-    file_types : list, optional
-        Allowed extension to look for. The default is ['*.mkv'].
-
-    Returns
-    -------
-    flist : list
-        List of Path objects in specified directory.
-
-    """
-
-    flist = [f for f_ in [Path(file_path).rglob(e) for e in file_types] for f in f_]
-
-    return flist
-
-
-def cwd():
-    """
-    Get current working directory.
-
-    Returns
-    -------
-    Path
-    """
-
-    return Path(__file__).cwd()
 
 
 def main():
@@ -877,9 +662,7 @@ def main():
 
 if __name__ == "__main__":
     """ Main """
-
-    # CWD
-    wdir = cwd()
+    cli_banner(__file__)
 
     # Stop execution at keyboard input
     try:

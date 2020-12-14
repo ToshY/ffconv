@@ -73,6 +73,29 @@ class FontFinder:
             filter(lambda x: x[dict_key].lower() == user_font.lower(), self.fonts)
         )
 
+    def mimetype_by_extension(file_extension: str) -> str:
+        """
+        Get appropriate mimetype; mimetype library cannot guess font mimes.
+
+        Parameters
+        ----------
+        file_extension : str
+            The specified font file.
+
+        Returns
+        -------
+        str
+            The mimetype for the corresponding file extension.
+
+        """
+        mimes = {
+            "ttf": "application/x-truetype-font",
+            "otf": "application/vnd.ms-opentype",
+            "eot": "application/vnd.ms-fontobject",
+        }
+
+        return mimes[file_extension.lower()]
+
     def _rebuild_font_cache(self) -> None:
         """
         Rebuild MatPlotLib font cache.
@@ -86,7 +109,7 @@ class FontFinder:
 
     def _get_available_fonts(self) -> list:
         """
-        Get all the unique available fonts on the current system
+        Get all the unique available fonts on the current system.
 
         Returns
         -------

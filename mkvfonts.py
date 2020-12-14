@@ -10,33 +10,13 @@ MKVfonts - Remuxing fonts from folder into MKV
 python mkvfonts.py -i "./input/myfile.mkv" -o "./output" -f "./input/fonts"
 """
 
-import pyfiglet
 import argparse
 import subprocess as sp
-from pathlib import Path
+from src.banner import cli_banner
 from src.simulate import SimulateLoading
-from src.colours import TextColours as tc
-
-
-class DirCheck(argparse.Action):
-    def __call__(self, parser, args, values, option_string=None):
-        for fl in values:
-            p = Path(fl).resolve()
-            if not p.exists():
-                raise FileNotFoundError(
-                    f"{tc.RED}The specificed path `{fl}` does not exist.{tc.NC}"
-                )
-            if p.is_file():
-                setattr(args, self.dest, {"path": p, "type": "file"})
-            elif p.is_dir():
-                setattr(args, self.dest, {"path": p, "type": "directory"})
-
-
-def cli_banner(banner_font="isometric3", banner_colour="OKBLUE", banner_width=200):
-    banner = pyfiglet.figlet_format(
-        Path(__file__).stem, font=banner_font, width=banner_width
-    )
-    print(f"{tc.CYAN}{banner}{tc.NC}")
+from src.args import files_in_dir
+from src.fonts import FontFinder
+from src.args import FileDirectoryCheck
 
 
 def cli_args():
@@ -54,9 +34,6 @@ def cli_args():
 
     """
 
-    # Banner
-    cli_banner()
-
     # Arguments
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -64,7 +41,7 @@ def cli_args():
         "--input",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to input file or directory",
     )
@@ -74,7 +51,7 @@ def cli_args():
         "--output",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to output directory",
     )
@@ -84,7 +61,7 @@ def cli_args():
         "--fonts",
         type=str,
         required=False,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to add additional fonts",
     )
@@ -94,7 +71,7 @@ def cli_args():
         "--subtitles",
         type=str,
         required=False,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to add additional subtitles",
     )
@@ -102,30 +79,6 @@ def cli_args():
     args = parser.parse_args()
 
     return args.input, args.output, args.fonts, args.subtitles
-
-
-def files_in_dir(file_path):
-    """
-    Get the files in the specified directory
-
-    Parameters
-    ----------
-    file_path : str
-        Path of input directory.
-
-    Returns
-    -------
-    flist : list
-        Files in input directory.
-
-    """
-
-    flist = []
-    for p in Path(file_path).iterdir():
-        if p.is_file():
-            flist.append(p)
-
-    return flist
 
 
 def remux_file(input_file, output_dir, fonts, new_file_suffix=" (1)"):
@@ -199,31 +152,6 @@ def remux_file(input_file, output_dir, fonts, new_file_suffix=" (1)"):
     return mkv_cmd
 
 
-def get_mimetype(file_ext):
-    """
-    
-    Get appropriate mimetype; mimetypes library cannot guess font types
-
-    Parameters
-    ----------
-    font_file : str
-        The specified font file
-
-    Returns
-    -------
-    str
-        The mimetype for the corresponding file extension
-
-    """
-    mimes = {
-        "ttf": "application/x-truetype-font",
-        "otf": "application/vnd.ms-opentype",
-        "eot": "application/vnd.ms-fontobject",
-    }
-
-    return mimes[file_ext.lower()]
-
-
 def mkv_font_attachments(fonts_list):
     """
 
@@ -245,7 +173,7 @@ def mkv_font_attachments(fonts_list):
             "--attachment-name",
             font.name,
             "--attachment-mime-type",
-            get_mimetype(font.suffix),
+            FontFinder.mimetype_by_extension(font.suffix),
             "--attach-file",
             str(font),
         ]
@@ -260,16 +188,12 @@ def check_input_in_dir(user_input):
         all_files = files_in_dir(user_input["path"])
     else:
         raise Exception(
-            'Invalid path type "{input_type}"'.format(input_type=user_input["type"])
+            "[red]Invalid path type [cyan]{input_type}[/cyan][/red]".format(
+                input_type=user_input["type"]
+            )
         )
 
     return all_files
-
-
-def cwd():
-    """ Get current working directory """
-
-    return Path(__file__).cwd()
 
 
 def main():
@@ -289,13 +213,11 @@ def main():
 
 if __name__ == "__main__":
     """ Main """
-
-    # CWD
-    wdir = cwd()
+    cli_banner(__file__)
 
     # Stop execution at keyboard input
     try:
-        main()
+        resl = main()
     except KeyboardInterrupt:
-        print("\r\n\r\n> Execution cancelled by user")
+        print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         pass

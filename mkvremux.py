@@ -13,36 +13,14 @@ python mkvremux.py -i "./input/file.mkv" -o "./output"
 import re
 import numpy as np
 import argparse
-import json
-import pyfiglet
 import subprocess as sp
-import functools as fc
 import itertools
 from pathlib import Path
 from operator import itemgetter
+from src.banner import cli_banner
 from src.simulate import SimulateLoading
-from src.colours import TextColours as tc
-
-
-class DirCheck(argparse.Action):
-    def __call__(self, parser, args, values, option_string=None):
-        for fl in values:
-            p = Path(fl).resolve()
-            if not p.exists():
-                raise FileNotFoundError(
-                    f"{tc.RED}The specificed path `{fl}` does not exist.{tc.NC}"
-                )
-            if p.is_file():
-                setattr(args, self.dest, {"path": p, "type": "file"})
-            elif p.is_dir():
-                setattr(args, self.dest, {"path": p, "type": "directory"})
-
-
-def cli_banner(banner_font="isometric3", banner_colour="OKBLUE", banner_width=200):
-    banner = pyfiglet.figlet_format(
-        Path(__file__).stem, font=banner_font, width=banner_width
-    )
-    print(f"{tc.CYAN}{banner}{tc.NC}")
+from src.args import FileDirectoryCheck, files_in_dir
+from src.general import list_to_dict, find_in_dict
 
 
 def cli_args():
@@ -71,7 +49,7 @@ def cli_args():
         "--input",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to input file or directory",
     )
@@ -81,7 +59,7 @@ def cli_args():
         "--output",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to output directory",
     )
@@ -99,91 +77,6 @@ def cli_args():
     args = parser.parse_args()
 
     return args.input, args.output, args.sort
-
-
-def read_json(input_file):
-    """
-    Read in JSON file
-
-    Parameters
-    ----------
-    input_file : str
-        The specified input JSON file
-
-    Returns
-    -------
-    data : dictonary
-        The JSON read data
-
-    """
-
-    with open(input_file) as json_file:
-        data = json.load(json_file)
-
-    return data
-
-
-def remove_empty_dict_values(input_dict):
-    """
-    Get keys from dictonary where the values are not empty
-
-    Parameters
-    ----------
-    input_dict : dict
-        The specified input dictonary
-
-    Returns
-    -------
-    dict
-        The input dictonary without the keys that have no empty values
-
-    """
-
-    cleared_data = {k: v for k, v in input_dict.items() if v is not None}
-
-    return cleared_data
-
-
-def dict_to_list(input_dict):
-    """
-    Convert dictonary key/values to 1D list
-
-    Parameters
-    ----------
-    input_dict : dict
-        The specified input dictonary
-
-    Returns
-    -------
-    output_list : list
-        List of key, value arguments
-
-    """
-
-    output_list = list(fc.reduce(lambda x, y: x + y, input_dict.items()))
-
-    return output_list
-
-
-def list_to_dict(input_list):
-    """
-    Convert list to key:value pairs
-
-    Parameters
-    ----------
-    input_list : list
-        The specified input list
-
-    Returns
-    -------
-    output_dict : TYPE
-        Dict of key:value pair
-
-    """
-
-    output_dict = dict(zip(input_list[::2], input_list[1::2]))
-
-    return output_dict
 
 
 def probe_file(input_file, extra_tags=["title"]):
@@ -222,8 +115,7 @@ def probe_file(input_file, extra_tags=["title"]):
                 "-select_streams",
                 s,
                 "-show_entries",
-                "stream={},\
-                                              :stream_tags={}".format(
+                "stream={},:stream_tags={}".format(
                     ",".join(main_tags), ",".join(extra_tags)
                 ),
                 "-of",
@@ -239,9 +131,7 @@ def probe_file(input_file, extra_tags=["title"]):
         return_code = SL.check_probe(cprocess)
 
         if return_code != 0:
-            raise Exception(
-                f"{tc.RED}FFprobe returned exit code `{return_code}`.{tc.NC}"
-            )
+            raise Exception(f"[red]FFprobe returned exit code `{return_code}`.[/red]")
 
         # Get CSV response
         oprocess = cprocess.communicate()[0].decode("utf-8").splitlines()
@@ -275,31 +165,6 @@ def probe_file(input_file, extra_tags=["title"]):
     return input_file.name, probe_output
 
 
-def find_in_dict(lst, key, value):
-    """
-    Find in current list with dictonaries
-
-    Parameters
-    ----------
-    lst : list
-        Input list
-    key : TYPE
-        Key to find
-    value : TYPE
-        Value to find
-
-    Returns
-    -------
-    TYPE : int | bool
-        Returns the index of found elemnt or False
-
-    """
-    for i, dic in enumerate(lst):
-        if dic[key] == value:
-            return i
-    return False
-
-
 def remux_file(
     input_file,
     probe_info,
@@ -308,7 +173,7 @@ def remux_file(
     new_file_suffix=" (1)",
     preferences=(("title", False),),
 ):
-    """    
+    """
     Remuxing file with logically resorting of indices to comply with the
     standard ordering of video - audio - subtitle streams.
     Extra priorty can be specified to sort based on codec, language or title.
@@ -412,12 +277,16 @@ def remux_file(
         return_code = SL.check_probe(cprocess)
 
         if return_code != 0:
-            raise Exception("MKVmerge returned exit code `{}`.".format(return_code))
+            raise Exception(
+                "[red]MKVmerge returned exit code [cyan]{}[/cyan][/red].".format(
+                    return_code
+                )
+            )
 
         return return_code
     except Exception as e:
         raise (
-            "An error occured while trying to remux your file:\n\r{}".format(
+            "[red]An error occured while trying to remux your file:[/red]\n\r[cyan]{}[/cyan]".format(
                 e.output.decode("utf-8")
             )
         )
@@ -433,7 +302,7 @@ def multisort(xs, specs):
         List with dictonaries to be sorted
     specs : tuple
         Sorting by specified keys with optional reverse
-        
+
 
     Returns
     -------
@@ -523,7 +392,9 @@ def main():
         all_files.sort(key=lambda x: str(x))
     else:
         raise Exception(
-            "Invalid path type `{input_type}`".format(input_type=inputs["type"])
+            "[red]Invalid path type [cyan]{input_type}[/cyan][/red]".format(
+                input_type=inputs["type"]
+            )
         )
 
     # Run
@@ -615,5 +486,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\r\n\r\n> Execution cancelled by user")
+        print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         pass

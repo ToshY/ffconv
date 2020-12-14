@@ -12,58 +12,18 @@ python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.
 
 import os
 import re
-import sys
 import argparse
-import mimetypes
 import json
-import pyfiglet
 import subprocess as sp
-import functools as fc
 from operator import itemgetter
 from pathlib import Path
-from src.simulate import SimulateLoading
+from src.banner import cli_banner
+from src.table import table_print_stream_options
+from src.args import FileDirectoryCheck, files_in_dir
+from src.general import read_file, read_json, remove_empty_dict_values
 from src.fonts import FontFinder
 from rich import print
 from rich.prompt import IntPrompt
-from rich.console import Console
-from rich.table import Table
-
-
-class DirCheck(argparse.Action):
-    def __call__(self, parser, args, values, option_string=None):
-        all_values = []
-        for fl in values:
-            p = Path(fl).resolve()
-            if not p.exists():
-                raise FileNotFoundError(
-                    f"[red]The specificed path `{fl}` does not exist.[/red]"
-                )
-            if p.is_file():
-                all_values.append({p: "file"})
-                continue
-            all_values.append({p: "directory"})
-
-        setattr(args, self.dest, all_values)
-
-
-class ExtCheck(argparse.Action):
-    def __call__(self, parser, args, values, option_string=None):
-        mimetypes.init()
-        stripped_ext = values.lstrip(".")
-        ext_check = "placeholder." + stripped_ext
-        mime_output = mimetypes.guess_type(ext_check)[0]
-        if "video" not in mime_output:
-            raise ValueError(
-                f"[red]The specificed output extension `{stripped_ext}` is not a valid video extension.[/red]"
-            )
-        setattr(args, self.dest, {"extension": stripped_ext})
-
-
-def cli_banner(banner_font="isometric3", banner_width=200):
-    banner = pyfiglet.figlet_format(
-        Path(__file__).stem, font=banner_font, width=banner_width
-    )
-    print(f"[bold magenta]{banner}[/bold magenta]")
 
 
 def cli_args():
@@ -81,9 +41,6 @@ def cli_args():
 
     """
 
-    # Banner
-    cli_banner()
-
     # Arguments
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -91,7 +48,7 @@ def cli_args():
         "--input",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to input file or directory",
     )
@@ -100,7 +57,7 @@ def cli_args():
         "--output",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to output directory",
     )
@@ -117,7 +74,7 @@ def cli_args():
         "--subtitle_preset",
         type=str,
         required=True,
-        action=DirCheck,
+        action=FileDirectoryCheck,
         nargs="+",
         help="Path to JSON file with ASS video preset options",
     )
@@ -195,7 +152,7 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
             ssdata = [stream_select[0]]
     else:
         len_stream_select = 0
-        ssdata = ['-1']
+        ssdata = ["-1"]
 
     len_spresets = len(spresets)
     if len_spresets != 1:
@@ -245,8 +202,8 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
                     """
                     If a batch contains a directory, and it contains more files than specified outputs, this should
                     throw an exception because it's not possible to create files with the same filename in the same
-                    output directory. The user has 2 options: 
-                    1. Just specify an output directory which leaves the filenames unchanged: 
+                    output directory. The user has 2 options:
+                    1. Just specify an output directory which leaves the filenames unchanged:
                         -o "./output"
                     2. Specify all the files as seperate "batches":
                         -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
@@ -330,148 +287,6 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
     return batch
 
 
-def print_subtitle_streams_options(tracks):
-
-    table = Table(show_header=True, header_style="bold cyan")
-
-    # Header
-    for key in tracks[0].keys():
-        table.add_column(key.capitalize())
-
-    # Rows
-    for track in tracks:
-        table.add_row(*[str(val) for val in list(track.values())])
-
-    console = Console()
-    console.print(table)
-
-
-def files_in_dir(file_path, file_types=["*.mkv"]):
-    """
-    Get the files in the specified directory.
-
-    Parameters
-    ----------
-    file_path : str
-        Path of input directory.
-    file_types : list, optional
-        Allowed extension to look for. The default is ['*.mkv'].
-
-    Returns
-    -------
-    flist : list
-        List of Path objects in specified directory.
-
-    """
-
-    flist = [f for f_ in [Path(file_path).rglob(e) for e in file_types] for f in f_]
-
-    return flist
-
-
-def remove_empty_dict_values(input_dict):
-    """
-    Get keys from dictonary where the values are not empty.
-
-    Parameters
-    ----------
-    input_dict : dict
-        The specified input dictonary.
-
-    Returns
-    -------
-    dict
-        The input dictonary without the keys that have no empty values
-
-    """
-
-    cleared_data = {k: v for k, v in input_dict.items() if v}
-
-    return cleared_data
-
-
-def dict_to_list(input_dict):
-    """
-    Convert dictonary key/values to 1D list
-
-    Parameters
-    ----------
-    input_dict : dict
-        The specified input dictonary
-
-    Returns
-    -------
-    ffmpeg_arglist : list
-        List of key-value arguments
-
-    """
-
-    ffmpeg_arglist = list(fc.reduce(lambda x, y: x + y, input_dict.items()))
-
-    return ffmpeg_arglist
-
-
-def list_to_dict(input_list):
-    """
-    Convert list to key:value pairs
-
-    Parameters
-    ----------
-    input_list : list
-        The specified input list
-
-    Returns
-    -------
-    output_dict : TYPE
-        Dict of key-value pair
-
-    """
-
-    output_dict = dict(zip(input_list[::2], input_list[1::2]))
-
-    return output_dict
-
-
-def read_subs(file_name):
-    """
-    Read in file
-
-    Parameters
-    ----------
-    file_name : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    TYPE
-        DESCRIPTION.
-
-    """
-    return open(str(file_name), mode="r").read().splitlines()
-
-
-def read_json(input_file):
-    """
-    Read in JSON file.
-
-    Parameters
-    ----------
-    input_file : str
-        The specified input JSON file
-
-    Returns
-    -------
-    data : dictonary
-        The JSON read data
-
-    """
-
-    with open(input_file) as json_file:
-        data = json.load(json_file)
-
-    return data
-
-
 def get_lines_per_type(my_lines, split_at=["Format: "]):
     return [
         (i, [x for x in re.split("|".join(split_at) + "|,", s) if x])
@@ -492,7 +307,7 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
 
     # file str
     input_file_str = str(input_file)
-    
+
     mkv_cmd = [
         "mkvmerge",
         "--identify",
@@ -525,18 +340,18 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
         for sub in tracks
         if sub["type"] == "subtitles"
     ]
-    
+
     # No user input provided, so identify streams and ask for input
-    if stream_select == '-1':
+    if stream_select == "-1":
         selected_subs = ass_subs[0]["index"]
         # Request user input for stream type
         if len(ass_subs) > 1:
             print(f"\r\n> Multiple subtitle streams detected")
-    
+
             # Print the options
-            print_subtitle_streams_options(ass_subs)
+            table_print_stream_options(ass_subs)
             allowed = [str(sub["index"]) for sub in ass_subs]
-    
+
             # Request user input
             selected_subs = IntPrompt.ask(
                 "\r\n# Please specify the subtitle index to use: ",
@@ -552,7 +367,7 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
         else:
             # Find index for language property; TODO make dynamic property
             selected_subs = next(
-                sub['index'] for sub in ass_subs if sub["language"] == stream_select
+                sub["index"] for sub in ass_subs if sub["language"] == stream_select
             )
 
     selected_subs = next(
@@ -611,18 +426,6 @@ def export_fonts_list(attachments, save_loc):
     return font_files, font_files_extract
 
 
-def cwd():
-    """
-    Get current working directory.
-
-    Returns
-    -------
-    Path
-    """
-
-    return Path(__file__).cwd()
-
-
 def main():
     # Input arguments
     user_args = cli_args()
@@ -646,11 +449,11 @@ def main():
 
             # Extract subs + fonts
             ass, fonts = extract_subsnfonts(
-                fl, fl_attachments_folder, b['subtitle_stream_select'][y]
+                fl, fl_attachments_folder, b["subtitle_stream_select"][y]
             )
 
             # Read subs
-            lines = read_subs(ass[1])
+            lines = read_file(ass[1], True)
 
             # Get Resolution/Format/Styles/Dialogues indices
             ass_ress = {
@@ -704,16 +507,12 @@ def main():
             ffdims = json.loads(cprocess.stdout)["streams"][0]
 
             # Resample ; TODO
-            # print(ass_ress, sub_settings, vid_dims)
+            # print(ass_ress, sub_settings, ffdims)
 
 
 if __name__ == "__main__":
     """ Main """
-
-    # CWD
-    wdir = cwd()
-
-    # Attachments folder gene
+    cli_banner(__file__)
 
     # Stop execution at keyboard input
     try:
