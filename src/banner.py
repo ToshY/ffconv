@@ -7,7 +7,7 @@ Created on Thu Dec  12 20:52:08 2020
 
 import pyfiglet
 from pathlib import Path
-
+from rich import print
 
 def cli_banner(
     current_file: str,
@@ -32,6 +32,6 @@ def cli_banner(
 
     """
     banner = pyfiglet.figlet_format(
-        Path(__file__).stem, font=banner_font, width=banner_width
+        Path(current_file).stem, font=banner_font, width=banner_width
     )
     print(f"[bold magenta]{banner}[/bold magenta]")

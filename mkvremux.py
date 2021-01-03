@@ -38,12 +38,8 @@ def cli_args():
 
     """
 
-    # Banner
-    cli_banner()
-
     # Arguments
     parser = argparse.ArgumentParser(description=__doc__)
-
     parser.add_argument(
         "-i",
         "--input",
@@ -478,9 +474,7 @@ def main():
 
 if __name__ == "__main__":
     """ Main """
-
-    # CWD
-    wdir = cwd()
+    cli_banner(__file__)
 
     # Stop execution at keyboard input
     try:
