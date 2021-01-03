@@ -447,12 +447,12 @@ def probe_file(
     original_batch_name = str([*original_batch][0])
 
     if mark == 0:
-        print(f"\r\n\r\n> FFprobe batch for [cyan]`{original_batch_name}`[/cyan]")
+        print(f"\r\n\r\n> MKVidentify batch for [cyan]`{original_batch_name}`[/cyan]")
 
     # Regex
     main_tags = ["id", "codec_name"]
 
-    print(f"> Starting FFprobe for [cyan]`{input_file.name}`[/cyan]")
+    print(f"\r\n> Starting MKVidentify for [cyan]`{input_file.name}`[/cyan]")
     # Changed to MKVmerge identify due to FFprobe identifying cover pictures as video streams
     mkvidentify_cmd = [
         "mkvmerge",
@@ -465,6 +465,12 @@ def probe_file(
 
     # Json output
     mkvidentify_out = json.loads(mkvidentify_process.stdout)
+    if mkvidentify_out["errors"]:
+        raise Exception(
+            'MKVidentify encountered the following error: "{}"'.format(
+                mkvidentify_out["errors"][0]
+            )
+        )
 
     # Split by codec_type
     split_streams, split_keys = split_list_of_dicts_by_key(
@@ -485,10 +491,10 @@ def probe_file(
     if idx == 0:
         mapping = stream_user_input(streams)
 
-    print("\r\n\r\n> FFprobe complete")
+    print("> MKVidentify [green]completed[/green]!")
 
     if mark == 1:
-        print(f"\r\n> FFprobe batch complete for [cyan]`{original_batch_name}`[/cyan]")
+        print(f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n")
 
     return streams, mapping
 
