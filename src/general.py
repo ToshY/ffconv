@@ -9,7 +9,6 @@ import collections
 import functools
 import json
 
-
 def read_file(input_file: str, split_lines: bool = True) -> list:
     """
     Read in file
@@ -119,6 +118,26 @@ def dict_to_list(key_value_dict: dict) -> list:
     """
 
     key_value_list = list(functools.reduce(lambda x, y: x + y, key_value_dict.items()))
+
+    return key_value_list
+
+def dict_to_tuple(key_value_dict: dict) -> list:
+    """
+    Convert dictonary key/values to 2D list of key,value tuples
+
+    Parameters
+    ----------
+    input_dict : dict
+        The specified input dictonary
+
+    Returns
+    -------
+    key_value_list : list
+        List of key:value arguments
+
+    """
+
+    key_value_list = [(k, v) for k, v in key_value_dict.items()]
 
     return key_value_list
 

@@ -328,8 +328,12 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
         {
             "index": sub["id"],
             "codec": sub["properties"]["codec_id"],
-            "language": sub["properties"]["language"],
-            "title": sub["properties"]["track_name"],
+            "language": sub["properties"]["language"]
+            if "language" in sub["properties"]
+            else "",
+            "title": sub["properties"]["track_name"]
+            if "track_name" in sub["properties"]
+            else "",
             "save_file": prepare_track_info(
                 input_file,
                 sub["id"],

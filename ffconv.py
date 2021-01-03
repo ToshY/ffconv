@@ -400,7 +400,7 @@ def stream_user_input(ffprobe_result):
 
             # Request user input
             selected_stream = IntPrompt.ask(
-                "\r\n# Please specify the subtitle id to use: ",
+                "\r\n# Please specify the {ty} id to use: ",
                 choices=allowed,
                 default=selected_stream,
                 show_choices=True,
@@ -453,7 +453,7 @@ def probe_file(
     main_tags = ["id", "codec_name"]
 
     print(f"> Starting FFprobe for [cyan]`{input_file.name}`[/cyan]")
-    # Changed to MKVmerge idenitfy due to FFprobe identifying cover pictures as video streams
+    # Changed to MKVmerge identify due to FFprobe identifying cover pictures as video streams
     mkvidentify_cmd = [
         "mkvmerge",
         "--identify",
@@ -591,13 +591,13 @@ def convert_file(
         + ["-movflags", "faststart", output_file]
     )
 
-    print("> The following FFmpeg will be executed:\r\n")
+    print("> The following FFmpeg command will be executed:\r\n")
     print(f"[green]{' '.join(ffmpeg_cmd)}[/green]")
 
     print(f"\r\n> FFmpeg conversion [cyan]running...[/cyan]", end="\r")
     cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
     return_code = cprocess.returncode
-    print(f"> FFmpeg conversion [green]completed[/green]!\r\n")
+    print("> FFmpeg conversion [green]completed[/green]!\r\n")
 
     if return_code != 0:
         raise Exception(f"[red]FFmpeg returned exit code `{return_code}`.[/red]")

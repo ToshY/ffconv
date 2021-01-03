@@ -10,17 +10,24 @@ MKVremux - Remuxing MKV files to appropriate stream ordering
 python mkvremux.py -i "./input/file.mkv" -o "./output"
 """
 
-import re
+import json
 import numpy as np
 import argparse
 import subprocess as sp
-import itertools
 from pathlib import Path
-from operator import itemgetter
+from src.table import table_print_stream_options
 from src.banner import cli_banner
-from src.simulate import SimulateLoading
 from src.args import FileDirectoryCheck, files_in_dir
-from src.general import list_to_dict, find_in_dict
+from src.general import (
+    find_in_dict,
+    read_json,
+    remove_empty_dict_values,
+    dict_to_list,
+    dict_to_tuple,
+    split_list_of_dicts_by_key,
+)
+from rich import print
+from rich.prompt import IntPrompt
 
 
 def cli_args():
@@ -46,6 +53,7 @@ def cli_args():
         type=str,
         required=True,
         action=FileDirectoryCheck,
+        const=True,
         nargs="+",
         help="Path to input file or directory",
     )
@@ -56,6 +64,7 @@ def cli_args():
         type=str,
         required=True,
         action=FileDirectoryCheck,
+        const=False,
         nargs="+",
         help="Path to output directory",
     )
@@ -66,108 +75,303 @@ def cli_args():
         type=str,
         required=False,
         nargs="+",
-        default=["title"],
         help="Sorting on tags",
     )
 
     args = parser.parse_args()
+    user_args = check_args(args.input, args.output, args.sort)
 
-    return args.input, args.output, args.sort
+    return user_args, args.input
 
 
-def probe_file(input_file, extra_tags=["title"]):
+def check_args(inputs, outputs, sorts):
     """
-    FFprobe to get video/audio/subtitle streams
+    Check the amount of input arguments, outputs and presets.
 
     Parameters
     ----------
-    input_file : Path
-        The specified input file as Path object
+    inputs : list
+        Input argument(s).
+    outputs : list
+        Output arugment(s).
+    sorts : list
+        Video preset argument(s).
 
     Raises
     ------
     Exception
-        Raised if exit code from FFprobe is not 0
+        Input arguments not equals the amount of other arguments (and is not equal to 1).
+
+    Returns
+    -------
+    None.
+
+    """
+
+    len_inputs = len(inputs)
+    len_outputs = len(outputs)
+
+    if len_inputs != len_outputs:
+        if len_outputs != 1:
+            raise Exception(
+                f"Amount of input arguments ({len_inputs}) "
+                "does not equal the amount of output arguments ({len_outputs})."
+            )
+
+    if sorts is not None:
+        len_sorts = len(sorts)
+        if len_sorts != 1:
+            if len_inputs != len_sorts:
+                raise Exception(
+                    f"Amount of input arguments ({len_inputs}) "
+                    "does not equal the amount of sort preset arguments ({len_sorts})."
+                )
+
+            sdata = []
+            for sp in sorts:
+                sdata.append(
+                    dict_to_list(
+                        remove_empty_dict_values(read_json(list(sp.keys())[0]))
+                    )
+                )
+        else:
+            sdata = dict_to_tuple(
+                read_json(sorts[0])
+            )
+    else:
+        len_sorts = 0
+        sdata = [
+            ("track_name", False), 
+            ("language", False)
+        ]
+
+    # Prepare inputs/outputs/presets
+    batch = {}
+    for i, el in enumerate(inputs):
+
+        cpath = [*el][0]
+        ptype = str(*el.values())
+
+        if ptype == "file":
+            all_files = [Path(cpath)]
+        elif ptype == "directory":
+            all_files = files_in_dir(cpath)
+
+        len_all_files_in_batch = len(all_files)
+
+        if len_outputs == 1:
+            output_files = [[*outputs][0]]
+            output_type = str(*outputs[0].values())
+            if ptype == "directory":
+                if len_all_files_in_batch > len_outputs and output_type == "file":
+                    """
+                    If a batch contains a directory, and it contains more files than specified outputs, this should
+                    throw an exception because it's not possible to create files with the same filename in the same
+                    output directory. The user has 2 options:
+                    1. Just specify an output directory which leaves the filenames unchanged:
+                        -o "./output"
+                    2. Specify all the files as seperate "batches":
+                    -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
+                    """
+                    raise Exception(
+                        f"The path `{str(cpath)}` contains "
+                        f"`{len_all_files_in_batch}`files but only "
+                        f"`{len_outputs}` "
+                        f"output filename(s) was/were specified."
+                    )
+                else:
+                    output_files = [outputs[0] for x in range(len(all_files))]
+        else:
+            output_files = outputs[0]
+            # Unset
+            outputs.pop(0)
+            # Check type
+            if ptype == "directory":
+                # Create copies
+                output_files = [output_files for x in range(len(all_files))]
+
+        if len_sorts == 1:
+            sort_data = sdata
+            if ptype == "directory":
+                sort_data = [sort_data for x in range(len(all_files))]
+        else:
+            if len_sorts == 0:
+                sort_data = sdata
+                sort_data = [sort_data for x in range(len(all_files))]
+            else:
+                sort_data = sdata[0]
+                sdata.pop(0)
+                if ptype == "directory":
+                    sort_data = [sort_data for x in range(len(all_files))]
+
+        batch[str(i)] = {
+            "input": all_files,
+            "output": output_files,
+            "sort_preset": sort_data,
+        }
+
+    return batch
+
+
+def stream_user_input(ffprobe_result):
+    """
+    Get stream mapping and possible user input in case of multiple streams for specific type.
+
+    Parameters
+    ----------
+    probe_result : list
+        List of dicts of video, audio and subtitle streams.
+
+    Raises
+    ------
+    Exception
+        Raises exception if stream count is 0.
+
+    Returns
+    -------
+    stream_map : dict
+        A key-value pair of stream type and mapping id.
+
+    """
+
+    stream_map = {}
+    stream_sum_count = 0
+    for ty, st in ffprobe_result.items():
+        if st["count"] == 0:
+            raise Exception(
+                f"No streams for type `{ty}` found. "
+                "Please make sure there's atleast 1 video, 1 audio and "
+                "1 subtitle stream."
+            )
+
+        if st["count"] == 1:
+            stream_map[ty] = st["streams"][0]["id"]
+        else:
+            print(f"\r\n> Multiple [cyan]{ty}[/cyan] streams detected")
+
+            # Default
+            selected_stream = st["streams"][0]["id"]
+
+            # Stream properties
+            stream_properties = [
+                {
+                    "id": cs["id"],
+                    "codec": cs["properties"]["codec_id"],
+                    "language": (
+                        cs["properties"]["language"]
+                        if "language" in cs["properties"]
+                        else ""
+                    ),
+                    "title": (
+                        cs["properties"]["track_name"]
+                        if "track_name" in cs["properties"]
+                        else ""
+                    ),
+                }
+                for cs in st["streams"]
+            ]
+
+            table_print_stream_options(stream_properties)
+            allowed = [str(cs["id"]) for cs in stream_properties]
+
+            # Request user input
+            selected_stream = IntPrompt.ask(
+                f"\r\n# Please specify the {ty} id to use: ",
+                choices=allowed,
+                default=selected_stream,
+                show_choices=True,
+                show_default=True,
+            )
+            print(f"\r> Stream index [green]`{selected_stream}`[/green] selected!")
+
+            stream_map[ty] = selected_stream
+
+        # print(ty, stream_sum_count, st["count"])
+
+        # Remap subtitle due to filter complex
+        if ty != "subtitles":
+            stream_sum_count = stream_sum_count + st["count"]
+        else:
+            stream_map[ty] = int(stream_map[ty]) - stream_sum_count
+
+    return stream_map
+
+
+def probe_file(input_file, idx, original_batch, mark):
+    """
+    MKVidentify to get video/audio/subtitle streams.
+
+    Parameters
+    ----------
+    input_file : Path
+        The specified input file as Path object.
+
+    Raises
+    ------
+    Exception
+        Raised if exit code from FFprobe is not 0.
 
     Returns
     -------
     probe_output : dict
-        Dictonary with tracks of the video/audio/subtitle streams
+        Dictonary with tracks of the video/audio/subtitle streams.
 
     """
 
-    # Regex
-    main_tags = ["index", "codec_name"]
+    original_batch_name = str([*original_batch][0])
 
-    print("\r\n> Starting FFprobe for `{}`".format(input_file.name))
-    # Probe
-    probe_output = {k: {"streams": {}, "count": 0} for k in ["v", "a", "s"]}
-    for s in probe_output:
-        cprocess = sp.Popen(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                s,
-                "-show_entries",
-                "stream={},:stream_tags={}".format(
-                    ",".join(main_tags), ",".join(extra_tags)
-                ),
-                "-of",
-                "csv=s=,:nk=0:p=0",
-                str(input_file),
-            ],
-            stdout=sp.PIPE,
-            stderr=sp.PIPE,
+    if mark == 0:
+        print(f"\r\n\r\n> MKVidentify batch for [cyan]`{original_batch_name}`[/cyan]")
+
+    print(f"\r\n> Starting MKVidentify for [cyan]`{input_file.name}`[/cyan]")
+    # Changed to MKVmerge identify due to FFprobe identifying cover pictures as video streams
+    mkvidentify_cmd = [
+        "mkvmerge",
+        "--identify",
+        "--identification-format",
+        "json",
+        str(input_file),
+    ]
+
+    mkvidentify_process = sp.run(mkvidentify_cmd, capture_output=True)
+
+    # Json output
+    mkvidentify_out = json.loads(mkvidentify_process.stdout)
+    if mkvidentify_out["errors"]:
+        raise Exception(
+            'MKVidentify encountered the following error: "{}"'.format(
+                mkvidentify_out["errors"][0]
+            )
         )
 
-        # Animate process in terminal
-        SL = SimulateLoading(f"FFprobe stream `{s}`")
-        return_code = SL.check_probe(cprocess)
+    # Split by codec_type
+    split_streams, split_keys = split_list_of_dicts_by_key(
+        mkvidentify_out["tracks"], "type"
+    )
 
-        if return_code != 0:
-            raise Exception(f"[red]FFprobe returned exit code `{return_code}`.[/red]")
+    # Rebuild streams & count per codec type
+    streams = {k: {"streams": {}, "count": 0} for k in split_keys}
+    for x, s in enumerate(split_keys):
+        streams[s]["streams"] = split_streams[x]
+        streams[s]["count"] = len(streams[s]["streams"])
 
-        # Get CSV response
-        oprocess = cprocess.communicate()[0].decode("utf-8").splitlines()
+    # Sort streams to video - audio - subtitles
+    streams = {k: streams[k] for k in ["video", "audio", "subtitles"]}
+    print("> MKVidentify [green]completed[/green]!")
 
-        # Split, clean and create dict
-        oprocess = [
-            list_to_dict(list(filter(None, re.split("([a-z_:]+)=", x))))
-            for x in oprocess
-        ]
+    if mark == 1:
+        print(f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n")
 
-        # Stream tags contain prefix 'tag:'
-        extra_tags_prefixed = ["tag:" + el for el in extra_tags]
-
-        stream_output = []
-        for ix, ss in enumerate(oprocess):
-            # Check if the extra tags are specified, else let them be empty
-            for el in main_tags + extra_tags_prefixed:
-                if el not in ss:
-                    oprocess[ix][el] = ""
-                    continue
-
-                oprocess[ix][el] = ss[el].rstrip(",")
-
-            ss["index"] = int(ss["index"])
-            stream_output.append(ss)
-
-        probe_output[s]["streams"] = stream_output
-        probe_output[s]["count"] = len(probe_output[s]["streams"])
-
-    print("\r\n\r\n> FFprobe complete")
-    return input_file.name, probe_output
+    return streams
 
 
 def remux_file(
     input_file,
-    probe_info,
-    tracks_to_remove,
+    track_order,
     output_dir,
+    original_batch,
+    mark,
     new_file_suffix=" (1)",
-    preferences=(("title", False),),
 ):
     """
     Remuxing file with logically resorting of indices to comply with the
@@ -178,8 +382,8 @@ def remux_file(
     ----------
     input_file : Path
         The specified input file as Path object
-    probe_info : dict
-        The corresponding FFprobe info for the input file
+    track_order : list
+        The new correct track ordering
     preferences : tuple, optional
         Option to set sorting by keys. The default is (('title', False)).
 
@@ -195,97 +399,54 @@ def remux_file(
 
     """
 
-    fnl_redone = []
-    for pb in probe_info:
-        ps_stream = probe_info[pb]["streams"]
+    original_batch_name = str([*original_batch][0])
 
-        cstream = []
-        for x in ps_stream:
-            cstream.append(x["index"])
+    if mark == 0:
+        print(f"> MKVmerge batch for [cyan]`{original_batch_name}`[/cyan]\r\n")
 
-        # Subresort by title, lang, etc...
-        opn = multisort(ps_stream, preferences)
+    track_order_args = ",".join(["0:" + str(v) for v in track_order])
 
-        for csi, cse in enumerate(cstream):
-            indx = find_in_dict(lst=opn, key="index", value=cse)
-            if csi != indx:
-                cstream[csi], cstream[indx] = cstream[indx], cstream[csi]
+    # Output split
+    output_path = list(output_dir.keys())[0]
+    output_type = list(output_dir.values())[0]
 
-        fnl_redone = fnl_redone + cstream
+    # Output extension
+    output_extension = ".mkv"
 
-    # Remove inconsistent tracks
-    mkv_cmd_add = []
-    if tracks_to_remove is not None:
-        print("\r\n\r\n> The tracks with the following IDs will be removed:\r\n")
-        print(tracks_to_remove)
-        ### ! FIX THIS, -A track_ids should be stream specific
-        fnl_redone = [e for e in fnl_redone if e not in tracks_to_remove]
-        for el in tracks_to_remove:
-            if el == "v":
-                vl = "video"
-            elif el == "a":
-                vl = "audio"
-            elif el == "s":
-                vl = "subtitle"
-
-            fnl_redone = [e for e in fnl_redone if e not in tracks_to_remove[el]]
-            mkv_cmd_add.append(
-                [
-                    "--" + vl + "-tracks",
-                    "!" + ",".join([str(v) for v in tracks_to_remove[el]]),
-                ]
-            )
-
-        mkv_cmd_add = list(itertools.chain(*mkv_cmd_add))
-
-    track_order_args = ",".join(["0:" + str(v) for v in fnl_redone])
-
-    # Prepare output file
-    if output_dir["type"] == "directory":
+    # Prepare output file name
+    if output_type == "directory":
         output_file = str(
-            output_dir["path"].joinpath(
-                input_file.stem + new_file_suffix + input_file.suffix
-            )
+            output_path.joinpath(input_file.stem + new_file_suffix + output_extension)
         )
     else:
-        output_file = str(
-            output_dir["path"].parent.joinpath(
-                input_file.stem + new_file_suffix + input_file.suffix
-            )
-        )
+        output_file = str(output_path.with_suffix("").with_suffix(output_extension))
 
     input_file_str = str(input_file)
-    mkv_cmd = (
-        ["mkvmerge", "--output", output_file]
-        + mkv_cmd_add
-        + ["(", input_file_str, ")", "--track-order", track_order_args]
-    )
+    mkvmerge_cmd = [
+        "mkvmerge",
+        "--output",
+        output_file,
+        "(",
+        input_file_str,
+        ")",
+        "--track-order",
+        track_order_args,
+    ]
 
-    mkv_cmd_verbose = " ".join(mkv_cmd)
-    print("\r\n\r\n> The following MKVmerge command will be executed:\r\n")
-    print(mkv_cmd_verbose)
+    print("> The following MKVmerge command will be executed:\r")
+    print(f"[green]{' '.join(mkvmerge_cmd)}[/green]")
 
-    try:
-        cprocess = sp.Popen(mkv_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    print(f"\r> MKVmerge [cyan]running...[/cyan]", end="\r")
+    cprocess = sp.run(mkvmerge_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
+    return_code = cprocess.returncode
+    if return_code != 0:
+        raise Exception(f"MKVmerge returned exit code `{return_code}`.")
+    print("> MKVmerge [green]completed[/green]!\r\n")
 
-        # Animate process in terminal
-        SL = SimulateLoading("Remuxing")
-        return_code = SL.check_probe(cprocess)
+    if mark == 1:
+        print(f"> MKVmerge batch complete for [cyan]`{original_batch_name}`[/cyan]")
 
-        if return_code != 0:
-            raise Exception(
-                "[red]MKVmerge returned exit code [cyan]{}[/cyan][/red].".format(
-                    return_code
-                )
-            )
-
-        return return_code
-    except Exception as e:
-        raise (
-            "[red]An error occured while trying to remux your file:[/red]\n\r[cyan]{}[/cyan]".format(
-                e.output.decode("utf-8")
-            )
-        )
+    return None
 
 
 def multisort(xs, specs):
@@ -306,170 +467,83 @@ def multisort(xs, specs):
         The sorted input list
 
     """
-
     if len(np.shape(specs)) == 1:
-        xs.sort(key=itemgetter(specs[0]), reverse=specs[1])
+        xs.sort(
+            key=lambda nx: nx["properties"][specs[0]]
+            if specs[0] in nx["properties"]
+            else "",
+            reverse=specs[1],
+        )
     else:
         for key, reverse in reversed(specs):
-            xs.sort(key=itemgetter(key), reverse=reverse)
+            xs.sort(
+                key=lambda nx: nx["properties"][key] if key in nx["properties"] else "",
+                reverse=reverse,
+            )
     return xs
-
-
-def files_in_dir(file_path):
-    """
-    Get the files in the specified directory
-
-    Parameters
-    ----------
-    file_path : str
-        Path of input directory.
-
-    Returns
-    -------
-    flist : list
-        Files in input directory.
-
-    """
-
-    flist = []
-    for p in Path(file_path).iterdir():
-        if p.is_file():
-            flist.append(p)
-
-    return flist
-
-
-def tracksPerStream(tracks):
-
-    minTracksPerStream = min(tracks, key=itemgetter("v", "a", "s"))
-    minTracksIdx = tracks.index(minTracksPerStream)
-
-    maxTracksPerStream = max(tracks, key=itemgetter("v", "a", "s"))
-    maxTracksIdx = tracks.index(maxTracksPerStream)
-
-    return minTracksPerStream, minTracksIdx, maxTracksPerStream, maxTracksIdx
-
-
-def compareListOfDicts(list1, list2):
-
-    set_list1 = set(tuple(sorted(d.items())) for d in list1)
-    set_list2 = set(tuple(sorted(d.items())) for d in list2)
-
-    set_overlapping = set_list1.intersection(set_list2)
-    set_difference = set_list1.symmetric_difference(set_list2)
-
-    list_dicts_difference = []
-    for tuple_element in set_difference:
-        list_dicts_difference.append(dict((x, y) for x, y in tuple_element))
-
-    return list_dicts_difference
-
-
-def get_list_items_per_index(user_list, indices):
-    return [user_list[i] for i in indices]
-
-
-def cwd():
-    """ Get current working directory """
-
-    return Path(__file__).cwd()
-
 
 def main():
     # Input arguments
-    inputs, output, sort = cli_args()
+    user_args, original_input = cli_args()
 
-    # FFprobe the file
-    if inputs["type"] == "file":
-        all_files = [inputs["path"]]
-    elif inputs["type"] == "directory":
-        all_files = files_in_dir(inputs["path"])
-        # Sort input files alphabetically
-        all_files.sort(key=lambda x: str(x))
-    else:
-        raise Exception(
-            "[red]Invalid path type [cyan]{input_type}[/cyan][/red]".format(
-                input_type=inputs["type"]
+    # Batching
+    for x, b in user_args.items():
+        to = []
+        pl = []
+        bn = []
+        mp = []
+        for y, fl in enumerate(b["input"]):
+            # Prepare sort
+            sort_by_key = b["sort_preset"][y]
+
+            # Check if first/last item for reporting
+            if fl == b["input"][0]:
+                m = 0
+            elif fl == b["input"][-1]:
+                m = 1
+            else:
+                m = None
+
+            probe_result = probe_file(fl, y, original_input[int(x)], m)
+
+            to_redone = []
+            for pb in probe_result:
+                ps_stream = probe_result[pb]["streams"]
+
+                cstream = []
+                for xnl in ps_stream:
+                    cstream.append(xnl["id"])
+
+                # Subresort by title, lang, etc...
+                opn = multisort(ps_stream, sort_by_key)
+
+                for csi, cse in enumerate(cstream):
+                    indx = find_in_dict(input_list=opn, key="id", value=cse)
+                    if csi != indx:
+                        cstream[csi], cstream[indx] = cstream[indx], cstream[csi]
+
+                to_redone = to_redone + cstream
+
+            # Append batch nr, probe result and new track order
+            bn.append(m)
+            pl.append(probe_result)
+            to.append(to_redone)
+
+        b["nr_in_batch"] = bn
+        b["track_order"] = to
+
+    # MKVremux
+    for x, b in user_args.items():
+        for z, flc in enumerate(b["input"]):
+            rmx = remux_file(
+                flc,
+                b["track_order"][z],
+                b["output"][z],
+                original_input[int(x)],
+                b["nr_in_batch"][z],
             )
-        )
 
-    # Run
-    pl = []
-    for fl in all_files:
-        _, probe_result = probe_file(fl, sort)
-        pl.append(probe_result)
-
-    # Check the tracks in every file in the batch for possible inconsistencies
-    track_count = []
-    files_to_remux = []
-    for fx, fs in enumerate(pl):
-        tml = {}
-        tmc = []
-        for s in fs:
-            tml[s] = fs[s]["count"]
-            tmc = tmc + [f["index"] for f in fs[s]["streams"]]
-
-        track_count.append(tml)
-
-        if list(range(0, len(tmc))) != tmc:
-            files_to_remux.append(fx)
-
-    # Get the minimum of video/audio/subtitle tracks (which should be OK for batch)
-    (
-        minTracksPerStream,
-        minTracksIdx,
-        maxTracksPerStream,
-        maxTracksIdx,
-    ) = tracksPerStream(track_count)
-
-    if (minTracksIdx == maxTracksIdx) and not files_to_remux:
-        return "No further remuxing steps necessary"
-
-    # Check tracks which are different from "min"
-    faulty_probes = []
-    faulty_probes_idx = []
-    for ix, dc in enumerate(track_count):
-        if minTracksPerStream == dc:
-            continue
-
-        faulty_probes.append(pl[ix])
-        faulty_probes_idx.append(ix)
-
-    # Following files contain more tracks than the base/min file
-    good_probe = pl[minTracksIdx]
-    to_remove = []
-    for xi, ni in zip(faulty_probes_idx, faulty_probes):
-        tmp = {all_files[xi].name: {}}
-        for st in ni:
-            cmp = compareListOfDicts(good_probe[st]["streams"], ni[st]["streams"])
-            if cmp:
-                tmp[all_files[xi].name][st] = []
-                for sst in cmp:
-                    tmp[all_files[xi].name][st].append(sst["index"])
-
-        to_remove.append(tmp)
-
-    # Show the inconsistent tracks
-    if to_remove:
-        print("\r\n> The following inconsistent tracks were found in the batch:\r\n")
-        print(to_remove)
-
-    # Get the files/probes to remux
-    cfiles = get_list_items_per_index(all_files, files_to_remux)
-    cprobes = get_list_items_per_index(pl, files_to_remux)
-
-    # Prepare sorts
-    sort_by_key = tuple([("tag:" + el, False) for el in sort])
-
-    # Remux (+ remove unwanted tracks)
-    for fl, pr in zip(cfiles, cprobes):
-        tridx = next((i for i, d in enumerate(to_remove) if fl.name in d), None)
-        if tridx is not None:
-            remove_tracks = to_remove[tridx][fl.name]
-        else:
-            remove_tracks = None
-
-        rmx = remux_file(fl, pr, remove_tracks, output, preferences=sort_by_key)
+    return user_args.items()
 
 
 if __name__ == "__main__":
@@ -481,4 +555,4 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
-        pass
+        exit()

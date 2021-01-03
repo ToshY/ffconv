@@ -8,7 +8,8 @@ Created on Thu Dec  12 20:52:08 2020
 import argparse
 import mimetypes
 from pathlib import Path
-
+from rich.traceback import install
+install()
 
 def current_working_dir():
     """
@@ -83,8 +84,8 @@ class FileDirectoryCheck(argparse.Action):
                 if p.suffix:
                     if not p.parent.is_dir():
                         raise FileNotFoundError(
-                            f"[red]The parent directory `{str(p.parent)}` "
-                            "for output argument `{str(p)}` does not exist.[/red]"
+                            f"The parent directory `{str(p.parent)}` "
+                            "for output argument `{str(p)}` does not exist."
                         )
                     else:
                         all_values.append({p: "file"})
@@ -94,9 +95,7 @@ class FileDirectoryCheck(argparse.Action):
                     all_values.append({p: "directory"})
             else:
                 if not p.exists():
-                    raise FileNotFoundError(
-                        f"[red]The specificed path `{fl}` does not exist.[/red]"
-                    )
+                    raise FileNotFoundError(f"The specificed path `{fl}` does not exist.")
                 if p.is_file():
                     all_values.append({p: "file"})
                 else:
@@ -141,7 +140,7 @@ class ExtensionCheck(argparse.Action):
         mime_output = mimetypes.guess_type(ext_check)[0]
         if "video" not in mime_output:
             raise ValueError(
-                f"[red]The specificed output extension `{stripped_ext}` "
-                "is not a valid video extension.[/red]"
+                f"The specificed output extension `{stripped_ext}` "
+                "is not a valid video extension."
             )
         setattr(args, self.dest, {"extension": stripped_ext})
