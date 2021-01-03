@@ -7,7 +7,7 @@ Created on Thu Oct  8 23:03:08 2020
 MKVremux - Remuxing MKV files to appropriate stream ordering
 
 # Example
-python mkvremux.py -i "./input/file.mkv" -o "./output"
+python mkvremux.py -i "input/file.mkv" -o "output" -s "preset/sort_preset.json"
 """
 
 import json
@@ -532,7 +532,7 @@ def main():
         b["nr_in_batch"] = bn
         b["track_order"] = to
 
-    # MKVremux
+    # MKVremux; TODO skip files if already ordered properly (range)
     for x, b in user_args.items():
         for z, flc in enumerate(b["input"]):
             rmx = remux_file(
