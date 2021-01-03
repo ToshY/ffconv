@@ -479,7 +479,7 @@ def probe_file(
 
     # Rebuild streams & count per codec type
     streams = {k: {"streams": {}, "count": 0} for k in split_keys}
-    for x, s in enumerate(split_streams):
+    for x, s in enumerate(split_keys):
         streams[s]["streams"] = split_streams[x]
         streams[s]["count"] = len(streams[s]["streams"])
 
