@@ -220,4 +220,4 @@ if __name__ == "__main__":
         resl = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
-        pass
+        exit()

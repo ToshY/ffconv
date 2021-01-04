@@ -10,6 +10,7 @@ FFconv - Hardcoding MKV to MP4 with FFmpeg
 python ffconv.py -i "./input/" -o "./output/" -e "mp4"
 """
 
+import sys
 import argparse
 import json
 import subprocess as sp
@@ -213,15 +214,6 @@ def check_args(inputs, outputs, vpresets, apresets):
             output_type = str(*outputs[0].values())
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
-                    """
-                    If a batch contains a directory, and it contains more files than specified outputs, this should
-                    throw an exception because it's not possible to create files with the same filename in the same
-                    output directory. The user has 2 options:
-                    1. Just specify an output directory which leaves the filenames unchanged:
-                        -o "./output"
-                    2. Specify all the files as seperate "batches":
-                    -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
-                    """
                     raise Exception(
                         f"[red]The path [cyan]`{str(cpath)}`[/cyan] [red]contains "
                         f"[cyan]`{len_all_files_in_batch}`[/cyan] [red]files but only "
@@ -298,12 +290,13 @@ def check_streams_order(ffprobe_result):
     """
     # Total streams
     tcount = list(range(0, sum([st["count"] for ix, st in ffprobe_result.items()])))
+
     # Check count and properly formatted file
     for ty, st in ffprobe_result.items():
         sc = st["count"]
         if tcount[:sc] != [cs["id"] for cs in st["streams"]]:
             raise Exception(
-                f"[red]The stream orders are not standarized. Please run [cyan]`mkvremux.py`[red] to sort the streams automatically with appropriate ordering.[/red]"
+                "The stream orders are not standarized. Please run `mkvremux.py` to sort the streams automatically with appropriate ordering."
             )
 
         del tcount[:sc]
@@ -410,8 +403,6 @@ def stream_user_input(ffprobe_result):
 
             stream_map[ty] = selected_stream
 
-        # print(ty, stream_sum_count, st["count"])
-
         # Remap subtitle due to filter complex
         if ty != "subtitles":
             stream_sum_count = stream_sum_count + st["count"]
@@ -421,11 +412,9 @@ def stream_user_input(ffprobe_result):
     return stream_map
 
 
-def probe_file(
-    input_file, idx, original_batch, mark, extra_tags=["track_name", "language"]
-):
+def probe_file(input_file, idx, original_batch, mark):
     """
-    FFprobe to get video/audio/subtitle streams.
+    MKVidentify to get video/audio/subtitle streams.
 
     Parameters
     ----------
@@ -449,11 +438,8 @@ def probe_file(
     if mark == 0:
         print(f"\r\n\r\n> MKVidentify batch for [cyan]`{original_batch_name}`[/cyan]")
 
-    # Regex
-    main_tags = ["id", "codec_name"]
-
     print(f"\r\n> Starting MKVidentify for [cyan]`{input_file.name}`[/cyan]")
-    # Changed to MKVmerge identify due to FFprobe identifying cover pictures as video streams
+
     mkvidentify_cmd = [
         "mkvmerge",
         "--identify",
@@ -461,6 +447,7 @@ def probe_file(
         "json",
         str(input_file),
     ]
+
     mkvidentify_process = sp.run(mkvidentify_cmd, capture_output=True)
 
     # Json output
@@ -494,7 +481,9 @@ def probe_file(
     print("> MKVidentify [green]completed[/green]!")
 
     if mark == 1:
-        print(f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n")
+        print(
+            f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n"
+        )
 
     return streams, mapping
 
@@ -533,20 +522,6 @@ def convert_file(
 
     if mark == 0:
         print(f"\r\n\r\n> FFmpeg batch for [cyan]`{original_batch_name}`[/cyan]")
-
-    # Get file duration first
-    ffprobe_cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        str(input_file),
-    ]
-    ffprobe_process = sp.run(ffprobe_cmd, capture_output=True)
-    file_duration = float(ffprobe_process.stdout)
 
     # Preset data
     v_data = video_preset_data
@@ -675,4 +650,4 @@ if __name__ == "__main__":
         batches = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
-        pass
+        exit()

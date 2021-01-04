@@ -15,7 +15,6 @@ import numpy as np
 import argparse
 import subprocess as sp
 from pathlib import Path
-from src.table import table_print_stream_options
 from src.banner import cli_banner
 from src.args import FileDirectoryCheck, files_in_dir
 from src.general import (
@@ -75,7 +74,7 @@ def cli_args():
         type=str,
         required=False,
         nargs="+",
-        help="Sorting on tags",
+        help="Sorting tags",
     )
 
     args = parser.parse_args()
@@ -135,15 +134,10 @@ def check_args(inputs, outputs, sorts):
                     )
                 )
         else:
-            sdata = dict_to_tuple(
-                read_json(sorts[0])
-            )
+            sdata = dict_to_tuple(read_json(sorts[0]))
     else:
         len_sorts = 0
-        sdata = [
-            ("track_name", False), 
-            ("language", False)
-        ]
+        sdata = [("track_name", False), ("language", False)]
 
     # Prepare inputs/outputs/presets
     batch = {}
@@ -164,15 +158,6 @@ def check_args(inputs, outputs, sorts):
             output_type = str(*outputs[0].values())
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
-                    """
-                    If a batch contains a directory, and it contains more files than specified outputs, this should
-                    throw an exception because it's not possible to create files with the same filename in the same
-                    output directory. The user has 2 options:
-                    1. Just specify an output directory which leaves the filenames unchanged:
-                        -o "./output"
-                    2. Specify all the files as seperate "batches":
-                    -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
-                    """
                     raise Exception(
                         f"The path `{str(cpath)}` contains "
                         f"`{len_all_files_in_batch}`files but only "
@@ -213,90 +198,6 @@ def check_args(inputs, outputs, sorts):
     return batch
 
 
-def stream_user_input(ffprobe_result):
-    """
-    Get stream mapping and possible user input in case of multiple streams for specific type.
-
-    Parameters
-    ----------
-    probe_result : list
-        List of dicts of video, audio and subtitle streams.
-
-    Raises
-    ------
-    Exception
-        Raises exception if stream count is 0.
-
-    Returns
-    -------
-    stream_map : dict
-        A key-value pair of stream type and mapping id.
-
-    """
-
-    stream_map = {}
-    stream_sum_count = 0
-    for ty, st in ffprobe_result.items():
-        if st["count"] == 0:
-            raise Exception(
-                f"No streams for type `{ty}` found. "
-                "Please make sure there's atleast 1 video, 1 audio and "
-                "1 subtitle stream."
-            )
-
-        if st["count"] == 1:
-            stream_map[ty] = st["streams"][0]["id"]
-        else:
-            print(f"\r\n> Multiple [cyan]{ty}[/cyan] streams detected")
-
-            # Default
-            selected_stream = st["streams"][0]["id"]
-
-            # Stream properties
-            stream_properties = [
-                {
-                    "id": cs["id"],
-                    "codec": cs["properties"]["codec_id"],
-                    "language": (
-                        cs["properties"]["language"]
-                        if "language" in cs["properties"]
-                        else ""
-                    ),
-                    "title": (
-                        cs["properties"]["track_name"]
-                        if "track_name" in cs["properties"]
-                        else ""
-                    ),
-                }
-                for cs in st["streams"]
-            ]
-
-            table_print_stream_options(stream_properties)
-            allowed = [str(cs["id"]) for cs in stream_properties]
-
-            # Request user input
-            selected_stream = IntPrompt.ask(
-                f"\r\n# Please specify the {ty} id to use: ",
-                choices=allowed,
-                default=selected_stream,
-                show_choices=True,
-                show_default=True,
-            )
-            print(f"\r> Stream index [green]`{selected_stream}`[/green] selected!")
-
-            stream_map[ty] = selected_stream
-
-        # print(ty, stream_sum_count, st["count"])
-
-        # Remap subtitle due to filter complex
-        if ty != "subtitles":
-            stream_sum_count = stream_sum_count + st["count"]
-        else:
-            stream_map[ty] = int(stream_map[ty]) - stream_sum_count
-
-    return stream_map
-
-
 def probe_file(input_file, idx, original_batch, mark):
     """
     MKVidentify to get video/audio/subtitle streams.
@@ -322,9 +223,8 @@ def probe_file(input_file, idx, original_batch, mark):
 
     if mark == 0:
         print(f"\r\n\r\n> MKVidentify batch for [cyan]`{original_batch_name}`[/cyan]")
-
     print(f"\r\n> Starting MKVidentify for [cyan]`{input_file.name}`[/cyan]")
-    # Changed to MKVmerge identify due to FFprobe identifying cover pictures as video streams
+
     mkvidentify_cmd = [
         "mkvmerge",
         "--identify",
@@ -360,7 +260,9 @@ def probe_file(input_file, idx, original_batch, mark):
     print("> MKVidentify [green]completed[/green]!")
 
     if mark == 1:
-        print(f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n")
+        print(
+            f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n"
+        )
 
     return streams
 
@@ -481,6 +383,7 @@ def multisort(xs, specs):
                 reverse=reverse,
             )
     return xs
+
 
 def main():
     # Input arguments
