@@ -10,7 +10,6 @@ FFconv - Hardcoding MKV to MP4 with FFmpeg
 python ffconv.py -i "./input/" -o "./output/" -e "mp4"
 """
 
-import sys
 import argparse
 import json
 import subprocess as sp

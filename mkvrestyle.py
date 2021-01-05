@@ -510,8 +510,12 @@ def main():
             # Json output
             ffdims = json.loads(cprocess.stdout)["streams"][0]
 
-            # Resample ; TODO
-            # print(ass_ress, sub_settings, ffdims)
+            # Resample; TODO
+            resample_mean = (
+                (ffdims["width"] / int(ass_ress["ResX"][-1][0]))
+                + (ffdims["height"] / int(ass_ress["ResY"][-1][0]))
+            ) / 2
+            print(style_lines_kept)
 
 
 if __name__ == "__main__":
@@ -523,4 +527,4 @@ if __name__ == "__main__":
         resl = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
-        pass
+        exit()

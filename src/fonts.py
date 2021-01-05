@@ -126,7 +126,7 @@ class FontFinder:
 
             file_path = pfont.resolve()
             file_name = pfont.name
-
+            
             initial_fonts.append(
                 {
                     **{"file_path": file_path, "file_name": file_name},
@@ -154,7 +154,12 @@ class FontFinder:
             Contains keys 'font_name', 'font_family' and 'font_style' for the specified font file.
 
         """
-        font = ttfo(str(file_path), ignoreDecompileErrors=True)
+
+        try:
+            font = ttfo(str(file_path), fontNumber=-1, ignoreDecompileErrors=True)
+        except:
+            font = ttfo(str(file_path), fontNumber=0, ignoreDecompileErrors=True)
+
         with rs(None):
             names = font["name"].names
 

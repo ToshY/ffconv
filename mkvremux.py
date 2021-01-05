@@ -26,7 +26,6 @@ from src.general import (
     split_list_of_dicts_by_key,
 )
 from rich import print
-from rich.prompt import IntPrompt
 
 
 def cli_args():
