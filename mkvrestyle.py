@@ -510,12 +510,17 @@ def main():
             # Json output
             ffdims = json.loads(cprocess.stdout)["streams"][0]
 
-            # Resample; TODO
+            # Calculate resample mean
             resample_mean = (
                 (ffdims["width"] / int(ass_ress["ResX"][-1][0]))
                 + (ffdims["height"] / int(ass_ress["ResY"][-1][0]))
             ) / 2
-            print(style_lines_kept)
+            
+            # Resample 
+            for idn, (line, style) in enumerate(style_lines_kept):
+                for idx, val in enumerate(style):
+                    if idx in [2,13,14,16,17,19,20,21]:
+                        style_lines_kept[idn][1][idx] = '{:0.2f}'.format(float(val)*resample_mean)
 
 
 if __name__ == "__main__":
