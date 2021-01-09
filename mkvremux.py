@@ -158,10 +158,10 @@ def check_args(inputs, outputs, sorts):
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
                     raise Exception(
-                        f"The path `{str(cpath)}` contains "
-                        f"`{len_all_files_in_batch}`files but only "
-                        f"`{len_outputs}` "
-                        f"output filename(s) was/were specified."
+                        f"The path `{str(cpath)}` contains"
+                        f" `{len_all_files_in_batch}`files but only"
+                        f" `{len_outputs}`"
+                        f" output filename(s) was/were specified."
                     )
                 else:
                     output_files = [outputs[0] for x in range(len(all_files))]

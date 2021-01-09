@@ -10,13 +10,13 @@ MKVrestyle - Restyle the main font styling of the embedded ASS file
 python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.json"
 """
 
-import sys
 import os
 import re
 import argparse
 import json
+import itertools as it
 import subprocess as sp
-from operator import itemgetter
+from collections import Counter
 from pathlib import Path
 from src.banner import cli_banner
 from src.table import table_print_stream_options
@@ -200,20 +200,11 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
             output_type = str(*outputs[0].values())
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
-                    """
-                    If a batch contains a directory, and it contains more files than specified outputs, this should
-                    throw an exception because it's not possible to create files with the same filename in the same
-                    output directory. The user has 2 options:
-                    1. Just specify an output directory which leaves the filenames unchanged:
-                        -o "./output"
-                    2. Specify all the files as seperate "batches":
-                        -i './input/file_1.mkv' './input/fle_2.mkv' -o './output/file_new_1.mp4' './output/file_new_2.mp4'
-                    """
                     raise Exception(
-                        f"[red]The path [cyan]`{str(cpath)}`[/cyan] [red]contains"
-                        f" [cyan]`{len_all_files_in_batch}`[/cyan] [red]files but only"
-                        f" [cyan]`{len_outputs}`[/cyan]"
-                        f" [red]output filename(s) was/were specified.[/red]"
+                        f"The path `{str(cpath)}` contains"
+                        f" `{len_all_files_in_batch}`files but only"
+                        f" `{len_outputs}`"
+                        f" output filename(s) was/were specified."
                     )
                 else:
                     output_files = [outputs[0] for x in range(len(all_files))]
@@ -296,42 +287,49 @@ def get_lines_per_type(my_lines, split_at=["Format: "]):
     ]
 
 
-def get_lines_per_type_dialogue(my_lines, keys, split_at=["Dialogue: ", "Comment: "]):
-    rgx = r"^(\d{1,}),(\d{1}:\d{2}:\d{2}.\d{2}),(\d{1}:\d{2}:\d{2}.\d{2}),(.*?),(.*?),(\d{1,}),(\d{1,}),(\d{1,}),([$^,]?|[^,]+?)?,(.*?)$"
-    return [
-        (
-            i,
-            dict(
-                zip(
-                    keys,
-                    *[
-                        list(re.findall(rgx, x)[0])
-                        for x in re.split("|".join(split_at), s)
-                        if x
-                    ],
-                )
-            ),
+def get_lines_per_format(my_lines):
+    rgx_style = r"^([Format]+):\s(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+)$"
+    rgx_dialogue = r"^([Format]+):\s(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+),[\s]?(\w+)$"
+    format_line_style = [
+        (i, list(re.findall(rgx_style, x)[0]))
+        for i, x in enumerate(my_lines)
+        if any(x.startswith(xs) for xs in ["Format: Name"])
+    ]
+    format_line_dialogue = [
+        (i, list(re.findall(rgx_dialogue, x)[0]))
+        for i, x in enumerate(my_lines)
+        if any(x.startswith(xs) for xs in ["Format: Layer"])
+    ]
+    format_lines = format_line_style + format_line_dialogue
+    if len(format_lines) > 2:
+        raise Exception(
+            "Invalid ASS syntax. The original ASS contains more than 2 format lines in total."
         )
-        for i, s in enumerate(my_lines)
-        if any(s.startswith(xs) for xs in split_at)
-    ]
+    return {"style": format_lines[0], "dialogue": format_lines[1]}
 
 
-def get_lines_per_type_style(my_lines, keys, split_at=["Style: "]):
-    rgx = r"^(\d{1,}),(\d{1}:\d{2}:\d{2}.\d{2}),(\d{1}:\d{2}:\d{2}.\d{2}),(.*?),(.*?),(\d{1,}),(\d{1,}),(\d{1,}),([$^,]?|[^,]+?)?,(.*?)$"
-    return [
-        (i, dict(zip(keys, [x for x in re.split("|".join(split_at) + "|,", s) if x])))
-        for i, s in enumerate(my_lines)
-        if any(s.startswith(xs) for xs in split_at)
+def get_lines_per_dialogue(my_lines, keys):
+    rgx = r"^^([Dialogue]+|[Comment]+):\s(\d{1,}),(\d{1}:\d{2}:\d{2}.\d{2}),(\d{1}:\d{2}:\d{2}.\d{2}),(.*?),(.*?),([0-9.]{1,4}),([0-9.]{1,4}),([0-9.]{1,4}),([$^,]?|[^,]+?)?,(.*?)$"
+    dialogue_lines = [
+        (i, dict(zip(keys, list(re.findall(rgx, x)[0]))))
+        for i, x in enumerate(my_lines)
+        if any(x.startswith(xs) for xs in ["Dialogue", "Comment"])
     ]
+    return dialogue_lines
+
+
+def get_lines_per_style(my_lines, keys, split_at=["Style: "]):
+    rgx = r"^([Style]+):\s(.*?),(.*?),([0-9.]{1,}),(&H[a-fA-F0-9]{8}),(&H[a-fA-F0-9]{8}),(&H[a-fA-F0-9]{8}),(&H[a-fA-F0-9]{8}),(0|-1),(0|-1),(0|-1),(0|-1),([0-9.]{1,}),([0-9.]{1,}),([0-9.]{1,}),([0-9.]{1,}),(1|3),([0-9.]{1,}),([0-9.]{1,}),([1-9]),([0-9.]{1,4}),([0-9.]{1,4}),([0-9.]{1,4}),(\d{1,3})$"
+    style_lines = [
+        (i, dict(zip(keys, list(re.findall(rgx, x)[0]))))
+        for i, x in enumerate(my_lines)
+        if any(x.startswith(xs) for xs in ["Style"])
+    ]
+    return style_lines
 
 
 def prepare_track_info(file, index, codec, lang):
     return file.stem + "_track" + str(index) + "_" + lang + subs_mimetype(codec)
-
-
-def additional_info():
-    return {"WrapStyle": "0", "ScaledBorderAndShadow": "yes", "YCbCr Matrix": "TV.709"}
 
 
 def extract_subsnfonts(input_file, save_loc, stream_select):
@@ -437,14 +435,41 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
         mkv_attachments_output = sp.check_output(mkv_attachments)
 
         # Get current fonts
-        font_names = [FF.font_info_by_file(el) for el in font_files]
+        font_info = [
+            {**{"file_path": Path(el)}, **FF.font_info_by_file(el)} for el in font_files
+        ]
 
         return (
             [selected_subs["save_file"], ass_track_path, available_fonts],
-            [font_files, font_names],
+            font_info,
         )
 
     return [selected_subs["save_file"], ass_track_path, available_fonts], []
+
+
+def get_available_fonts(fonts_list: dict, font_names_list: list) -> list:
+    fonts_available = {}
+    for font in font_names_list:
+        fonts_available[font] = next(
+            (item for item in fonts_list if item["font_name"] == font), False
+        )
+
+    return fonts_available
+
+
+def check_available_fonts(fs_fonts: dict, em_fonts: dict, key: str):
+    if (fs_fonts[key] is False) & (em_fonts[key] is False):
+        raise Exception(
+            "The font `{key}` could not be found on the filesystem and could also not be found as an extracted attachment from the source file."
+        )
+    elif (fs_fonts[key] is False) and (em_fonts[key] is not False):
+        main_font = em_fonts[key]
+    elif (fs_fonts[key] is not False) and (em_fonts[key] is False):
+        main_font = fs_fonts[key]
+    else:
+        main_font = em_fonts[key]
+
+    return main_font
 
 
 def subs_mimetype(codec_id):
@@ -461,6 +486,7 @@ def export_fonts_list(attachments, save_loc):
     font_files_extract = []
     for el in attachments:
         fl = os.path.join(save_loc, el["file_name"])
+        font_files.append(fl)
         font_files_extract.append("{}:{}".format(el["id"], fl))
 
     return font_files, font_files_extract
@@ -506,33 +532,27 @@ def main():
             lines = read_file_content["content"]
 
             # Get Resolution/Format/Styles/Dialogues indices
-            ass_ress = {
-                "ResX": get_lines_per_type(lines, ["PlayResX: "])[0],
-                "ResY": get_lines_per_type(lines, ["PlayResY: "])[0],
+            ass_resolution = {
+                "PlayResX": get_lines_per_type(lines, ["PlayResX: "])[0],
+                "PlayResY": get_lines_per_type(lines, ["PlayResY: "])[0],
             }
-            format_lines = get_lines_per_type(lines, ["Format: "])
-            style_lines = get_lines_per_type_style(lines, format_lines[0][-1])
-            dialogue_lines = get_lines_per_type_dialogue(lines, format_lines[-1][-1])
+            format_lines = get_lines_per_format(lines)
+            style_lines = get_lines_per_style(lines, format_lines["style"][1])
+            dialogue_lines = get_lines_per_dialogue(lines, format_lines["dialogue"][1])
 
             # Style names
-            style_names = list(set([el[-1].get("Name") for el in style_lines]))
+            style_names = list(set([el[-1]["Name"] for el in style_lines]))
 
             # Style names from dialogue
-            style_names_dialogue = list(
-                set([el[-1].get("Style") for el in dialogue_lines])
-            )
-
-            # Keep the following styles which are in both defined in dialogue and styles
-            remove_style_names = list(set(style_names) - set(style_names_dialogue))
+            style_names_dialogue_all = [el[-1]["Style"] for el in dialogue_lines]
+            style_names_dialogue = list(set(style_names_dialogue_all))
 
             # Find the dialogue styles which exist and which not in Styles
             style_lines_kept = [
-                el for el in style_lines if el[-1].get("Name") in style_names_dialogue
+                el for el in style_lines if el[-1]["Name"] in style_names_dialogue
             ]
             style_lines_remove = [
-                el[0]
-                for el in style_lines
-                if el[-1].get("Name") not in style_names_dialogue
+                el for el in style_lines if el[-1]["Name"] not in style_names_dialogue
             ]
 
             # User styling settings
@@ -556,11 +576,13 @@ def main():
 
             # Json output
             ffdims = json.loads(cprocess.stdout)["streams"][0]
+            ffdims["PlayResX"] = ffdims.pop("width")
+            ffdims["PlayResY"] = ffdims.pop("height")
 
             # Calculate resample mean between video dimensions and preset
             ass_resample_mean = resample_mean(
-                [ffdims["width"], ffdims["height"]],
-                [ass_ress["ResX"][-1][0], ass_ress["ResY"][-1][0]],
+                [ffdims["PlayResX"], ffdims["PlayResY"]],
+                [ass_resolution["PlayResX"][-1][0], ass_resolution["PlayResY"][-1][0]],
             )
 
             # Resample ASS to video dimensions and user preset
@@ -579,51 +601,173 @@ def main():
                     ]:
                         if int(style[key]) != 0:
                             if key not in ["ScaleX", "ScaleY"]:
-                                style_lines_kept[ids][1][key] = round(
+                                style[key] = round(
                                     float(style[key]) * ass_resample_mean, 2
                                 )
                             preset_key_dict = sub_settings[key]
                             if preset_key_dict:
                                 resampled_value = round(
-                                    float(style_lines_kept[ids][1][key])
+                                    float(style[key])
                                     * float(preset_key_dict["factor"]),
                                     preset_key_dict["round"],
                                 )
                                 if preset_key_dict["round"] == 0:
                                     resampled_value = int(resampled_value)
-                                style_lines_kept[ids][1][key] = str(resampled_value)
-                                lines[line] = "Style: " + ",".join(
-                                    list(style_lines_kept[ids][1].values())
-                                )
+                                style[key] = str(resampled_value)
+
+                # Change original line to resampled line
+                format_type = dict(it.islice(style.items(), 1))["Format"]
+                format_values = list(dict(it.islice(style.items(), 1, None)).values())
+                lines[line] = "{}: {}".format(format_type, ",".join(format_values))
 
             # Resample dialogue margins
             for idd, (line, dialogue) in enumerate(dialogue_lines):
                 for key in dialogue:
                     if key in ["MarginL", "MarginR", "MarginV"]:
                         if int(dialogue[key]) != 0:
-                            dialogue_lines[idd][1][key] = round(
+                            dialogue[key] = round(
                                 float(dialogue[key]) * ass_resample_mean, 2
                             )
                             preset_key_dict = sub_settings[key]
                             if preset_key_dict:
                                 resampled_value = round(
-                                    float(dialogue_lines[idd][1][key])
+                                    float(dialogue[key])
                                     * float(preset_key_dict["factor"]),
                                     preset_key_dict["round"],
                                 )
                                 if preset_key_dict["round"] == 0:
                                     resampled_value = int(resampled_value)
-                                dialogue_lines[idd][1][key] = str(resampled_value)
+                                dialogue[key] = str(resampled_value)
 
-            # Remove unnecessary lines now
+                # Change original line to resampled line
+                format_type = dict(it.islice(dialogue.items(), 1))["Format"]
+                format_values = list(
+                    dict(it.islice(dialogue.items(), 1, None)).values()
+                )
+                lines[line] = "{}: {}".format(format_type, ",".join(format_values))
+
+            # Check font preset options
+            font_settings = sub_settings["FontName"]
+            font_name = font_settings["name"]
+            if not isinstance(font_name, str):
+                raise Exception(
+                    f"Invalid font name `{font_name}` provided. Please provide and empty string or valid font name."
+                )
+
+            font_option = font_settings["option"]
+            # Set font option to 0 if no font provided
+            if (font_name == "") | (font_option < 0) | (font_option > 2):
+                font_option == 0
+
+            # Style font replacement (from ASS styles)
+            font_names_kept = [*{*[el[-1]["Fontname"] for el in style_lines_kept]}]
+
+            # Font replacement; 2 = all; 1 = main; 0 = none
+            if font_option == 2:
+                # Preset font availability
+                fonts_filesystem = get_available_fonts(ass[2], [font_name])
+                fonts_embed = get_available_fonts(fonts, [font_name])
+
+                print(fonts_filesystem, fonts_embed, font_name)
+                main_fonts_preset = check_available_fonts(
+                    fonts_filesystem, fonts_embed, font_name
+                )
+
+                # Replacement of every existing style
+                style_lines = get_lines_per_style(lines, format_lines["style"][1])
+                for (line, style) in style_lines:
+                    for key in style:
+                        if key == "Fontname":
+                            style[key] = main_fonts_preset["font_name"]
+
+                    # Change original line to resampled line
+                    format_type = dict(it.islice(style.items(), 1))["Format"]
+                    format_values = list(
+                        dict(it.islice(style.items(), 1, None)).values()
+                    )
+                    lines[line] = "{}: {}".format(format_type, ",".join(format_values))
+            elif font_option == 1:
+                # Preset font availability
+                fonts_filesystem = get_available_fonts(ass[2], [font_name])
+                fonts_embed = get_available_fonts(fonts, [font_name])
+
+                main_fonts_preset = check_available_fonts(
+                    fonts_filesystem, fonts_embed, font_name
+                )
+
+                # ASS font availability
+                fonts_filesystem = get_available_fonts(ass[2], font_names_kept)
+                fonts_embed = get_available_fonts(fonts, font_names_kept)
+
+                main_fonts_ass = []
+                for (fname, filesystem_font), (_, embed_font) in zip(
+                    fonts_filesystem.items(), fonts_embed.items()
+                ):
+                    main_fonts_ass.append(
+                        check_available_fonts(
+                            {fname: filesystem_font}, {fname: embed_font}, fname
+                        )
+                    )
+
+                # Get most occuring style name
+                style_occurence = Counter(style_names_dialogue_all)
+                max_occuring_style_name = max(style_occurence, key=style_occurence.get)
+                # Get corresponding font for style to replace
+                max_occuring_style = next(
+                    (
+                        item
+                        for item in style_lines_kept
+                        if item[1]["Name"] == max_occuring_style_name
+                    ),
+                    False,
+                )
+                max_occuring_font = max_occuring_style[1]["Fontname"]
+
+                # Replacement of most occuring font (e.g. in main/top/italic) by preset font
+                style_lines = get_lines_per_style(lines, format_lines["style"][1])
+                for (line, style) in style_lines:
+                    for key in style:
+                        if (key == "Fontname") & (style[key] == max_occuring_font):
+                            style[key] = main_fonts_preset["font_name"]
+
+                    # Change original line to resampled line
+                    format_type = dict(it.islice(style.items(), 1))["Format"]
+                    format_values = list(
+                        dict(it.islice(style.items(), 1, None)).values()
+                    )
+                    lines[line] = "{}: {}".format(format_type, ",".join(format_values))
+
+            else:
+                # ASS font availability
+                fonts_filesystem = get_available_fonts(ass[2], font_names_kept)
+                fonts_embed = get_available_fonts(fonts, font_names_kept)
+
+                main_fonts_ass = []
+                for (fname, filesystem_font), (_, embed_font) in zip(
+                    fonts_filesystem.items(), fonts_embed.items()
+                ):
+                    main_fonts_ass.append(
+                        check_available_fonts(
+                            {fname: filesystem_font}, {fname: embed_font}, fname
+                        )
+                    )
+
+            # Replace PlayRes by video dimension
+            for (direction, (line, _)) in ass_resolution.items():
+                lines[line] = f"{direction}: {ffdims[direction]}"
+
+            # Remove unnecessary styles
             lines = [
-                el for idx, el in enumerate(lines) if idx not in style_lines_remove
+                el
+                for idx, el in enumerate(lines)
+                if idx not in [idy for idy, style in style_lines_remove]
             ]
 
-            print(list(filter(lambda fn: fn["font_name"] == "Times New Roman", ass[2])))
             # Overwrite ASS
             with open(ass[1], "w", encoding=read_file_content["encoding"]) as f:
                 f.write("\n".join(item for item in lines))
+
+            # Remux file back; TODO
 
 
 if __name__ == "__main__":

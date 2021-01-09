@@ -4,7 +4,7 @@
         "option":0
     },
     "Fontsize":{
-        "factor":0.96,
+        "factor":0.95,
         "round":0
     },
     "ScaleX":{
@@ -36,7 +36,7 @@
         "round":0
     },
     "MarginV":{
-        "factor":0.71,
+        "factor":0.81,
         "round":0
     }
 }
