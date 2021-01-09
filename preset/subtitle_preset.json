@@ -1,15 +1,42 @@
 {
-    "ResX":"848",
-    "ResY":"480",
-    "FontName":"Open Sans Semibold",
-    "FontSize":"28",
-    "ScaleX":"",
-    "ScaleY":"",
-    "Spacing":"",
-    "Outline":"1.7",
-    "Shadow":"0.25",
-    "Alignment":"",
-    "MarginL":"15",
-    "MarginR":"15",
-    "MarginV":"25"
+    "FontName":{
+        "name":"Open Sans Semibold",
+        "option":0
+    },
+    "Fontsize":{
+        "factor":0.96,
+        "round":0
+    },
+    "ScaleX":{
+        "factor":1,
+        "round":0
+    },
+    "ScaleY":{
+        "factor":1,
+        "round":0
+    },
+    "Spacing":{
+        "factor":1,
+        "round":0
+    },
+    "Outline":{
+        "factor":0.646,
+        "round":2
+    },
+    "Shadow":{
+        "factor":0,
+        "round":0
+    },
+    "MarginL":{
+        "factor":0,
+        "round":0
+    },
+    "MarginR":{
+        "factor":0,
+        "round":0
+    },
+    "MarginV":{
+        "factor":0.71,
+        "round":0
+    }
 }

@@ -9,7 +9,10 @@ import collections
 import functools
 import json
 
-def read_file(input_file: str, split_lines: bool = True) -> list:
+
+def read_file(
+    input_file: str, split_lines: bool = True, custom_encoding: str = "latin-1"
+) -> list:
     """
     Read in file
 
@@ -25,12 +28,12 @@ def read_file(input_file: str, split_lines: bool = True) -> list:
 
     """
 
-    input_file_read = open(str(input_file), mode="r").read()
+    input_file_read = open(str(input_file), mode="r", encoding=custom_encoding).read()
 
     if split_lines:
-        return input_file_read.splitlines()
+        return {"content": input_file_read.splitlines(), "encoding": custom_encoding}
 
-    return input_file_read
+    return {"content": input_file_read, "encoding": custom_encoding}
 
 
 def read_json(input_file: str) -> dict:
@@ -54,6 +57,7 @@ def read_json(input_file: str) -> dict:
 
     return data
 
+
 def find_in_dict(input_list: list, key: str, value: str):
     """
     Find in current list with dictonaries.
@@ -76,7 +80,7 @@ def find_in_dict(input_list: list, key: str, value: str):
     for i, dic in enumerate(input_list):
         if dic[key] == value:
             return i
-    
+
     return False
 
 
@@ -120,6 +124,7 @@ def dict_to_list(key_value_dict: dict) -> list:
     key_value_list = list(functools.reduce(lambda x, y: x + y, key_value_dict.items()))
 
     return key_value_list
+
 
 def dict_to_tuple(key_value_dict: dict) -> list:
     """

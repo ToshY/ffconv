@@ -10,6 +10,7 @@ MKVrestyle - Restyle the main font styling of the embedded ASS file
 python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.json"
 """
 
+import sys
 import os
 import re
 import argparse
@@ -289,7 +290,37 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
 
 def get_lines_per_type(my_lines, split_at=["Format: "]):
     return [
-        (i, [x for x in re.split("|".join(split_at) + "|,", s) if x])
+        (i, [x for x in re.split("|".join(split_at) + "|,[\s]?", s) if x])
+        for i, s in enumerate(my_lines)
+        if any(s.startswith(xs) for xs in split_at)
+    ]
+
+
+def get_lines_per_type_dialogue(my_lines, keys, split_at=["Dialogue: ", "Comment: "]):
+    rgx = r"^(\d{1,}),(\d{1}:\d{2}:\d{2}.\d{2}),(\d{1}:\d{2}:\d{2}.\d{2}),(.*?),(.*?),(\d{1,}),(\d{1,}),(\d{1,}),([$^,]?|[^,]+?)?,(.*?)$"
+    return [
+        (
+            i,
+            dict(
+                zip(
+                    keys,
+                    *[
+                        list(re.findall(rgx, x)[0])
+                        for x in re.split("|".join(split_at), s)
+                        if x
+                    ],
+                )
+            ),
+        )
+        for i, s in enumerate(my_lines)
+        if any(s.startswith(xs) for xs in split_at)
+    ]
+
+
+def get_lines_per_type_style(my_lines, keys, split_at=["Style: "]):
+    rgx = r"^(\d{1,}),(\d{1}:\d{2}:\d{2}.\d{2}),(\d{1}:\d{2}:\d{2}.\d{2}),(.*?),(.*?),(\d{1,}),(\d{1,}),(\d{1,}),([$^,]?|[^,]+?)?,(.*?)$"
+    return [
+        (i, dict(zip(keys, [x for x in re.split("|".join(split_at) + "|,", s) if x])))
         for i, s in enumerate(my_lines)
         if any(s.startswith(xs) for xs in split_at)
     ]
@@ -350,7 +381,7 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
         selected_subs = ass_subs[0]["index"]
         # Request user input for stream type
         if len(ass_subs) > 1:
-            print(f"\r\n> Multiple subtitle streams detected")
+            print("\r\n> Multiple [cyan]subtitle[/cyan] streams detected")
 
             # Print the options
             table_print_stream_options(ass_subs)
@@ -380,7 +411,12 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
     ass_track_path = Path(os.path.join(save_loc, selected_subs["save_file"]))
 
     # MKVextract subtitle track
-    mkv_subs = ["mkvextract", "tracks", input_file_str] + ["2:" + str(ass_track_path)]
+    mkv_subs = [
+        "mkvextract",
+        "tracks",
+        input_file_str,
+        f'{selected_subs["index"]}:{ass_track_path}',
+    ]
     mkv_subs_output = sp.check_output(mkv_subs)
 
     # To export fonts
@@ -430,6 +466,15 @@ def export_fonts_list(attachments, save_loc):
     return font_files, font_files_extract
 
 
+def resample_mean(dimensions_list_one, dimensions_list_two):
+    mean_factor = (
+        (int(dimensions_list_one[0]) / int(dimensions_list_two[0]))
+        + (int(dimensions_list_one[1]) / int(dimensions_list_two[1]))
+    ) / 2
+
+    return mean_factor
+
+
 def main():
     # Input arguments
     user_args = cli_args()
@@ -457,7 +502,8 @@ def main():
             )
 
             # Read subs
-            lines = read_file(ass[1], True)
+            read_file_content = read_file(ass[1], True)
+            lines = read_file_content["content"]
 
             # Get Resolution/Format/Styles/Dialogues indices
             ass_ress = {
@@ -465,28 +511,29 @@ def main():
                 "ResY": get_lines_per_type(lines, ["PlayResY: "])[0],
             }
             format_lines = get_lines_per_type(lines, ["Format: "])
-            style_lines = get_lines_per_type(lines, ["Style: "])
-            dialogue_lines = get_lines_per_type(lines, ["Dialogue: ", "Comment: "])
+            style_lines = get_lines_per_type_style(lines, format_lines[0][-1])
+            dialogue_lines = get_lines_per_type_dialogue(lines, format_lines[-1][-1])
 
             # Style names
-            style_names = [(i, el[0], el[1][0]) for i, el in enumerate(style_lines)]
+            style_names = list(set([el[-1].get("Name") for el in style_lines]))
 
             # Style names from dialogue
-            style_names_dialogue = list(set([el[1][3] for el in dialogue_lines]))
+            style_names_dialogue = list(
+                set([el[-1].get("Style") for el in dialogue_lines])
+            )
 
             # Keep the following styles which are in both defined in dialogue and styles
-            keep_style_names = set(style_names_dialogue) - set(style_names)
+            remove_style_names = list(set(style_names) - set(style_names_dialogue))
 
-            # Find them back in styles
-            keep_style_lines_idx = [
-                el[0] for el in style_names if el[2] in keep_style_names
+            # Find the dialogue styles which exist and which not in Styles
+            style_lines_kept = [
+                el for el in style_lines if el[-1].get("Name") in style_names_dialogue
             ]
-            remove_style_lines_idx = [
-                el[0] for el in style_names if el[2] not in keep_style_names
+            style_lines_remove = [
+                el[0]
+                for el in style_lines
+                if el[-1].get("Name") not in style_names_dialogue
             ]
-
-            # Kept styles used for restyling
-            style_lines_kept = list(itemgetter(*keep_style_lines_idx)(style_lines))
 
             # User styling settings
             sub_settings = b["subtitle_preset"]
@@ -510,17 +557,73 @@ def main():
             # Json output
             ffdims = json.loads(cprocess.stdout)["streams"][0]
 
-            # Calculate resample mean
-            resample_mean = (
-                (ffdims["width"] / int(ass_ress["ResX"][-1][0]))
-                + (ffdims["height"] / int(ass_ress["ResY"][-1][0]))
-            ) / 2
-            
-            # Resample 
-            for idn, (line, style) in enumerate(style_lines_kept):
-                for idx, val in enumerate(style):
-                    if idx in [2,13,14,16,17,19,20,21]:
-                        style_lines_kept[idn][1][idx] = '{:0.2f}'.format(float(val)*resample_mean)
+            # Calculate resample mean between video dimensions and preset
+            ass_resample_mean = resample_mean(
+                [ffdims["width"], ffdims["height"]],
+                [ass_ress["ResX"][-1][0], ass_ress["ResY"][-1][0]],
+            )
+
+            # Resample ASS to video dimensions and user preset
+            for ids, (line, style) in enumerate(style_lines_kept):
+                for key in style:
+                    if key in [
+                        "Fontsize",
+                        "ScaleX",
+                        "ScaleY",
+                        "Spacing",
+                        "Outline",
+                        "Shadow",
+                        "MarginL",
+                        "MarginR",
+                        "MarginV",
+                    ]:
+                        if int(style[key]) != 0:
+                            if key not in ["ScaleX", "ScaleY"]:
+                                style_lines_kept[ids][1][key] = round(
+                                    float(style[key]) * ass_resample_mean, 2
+                                )
+                            preset_key_dict = sub_settings[key]
+                            if preset_key_dict:
+                                resampled_value = round(
+                                    float(style_lines_kept[ids][1][key])
+                                    * float(preset_key_dict["factor"]),
+                                    preset_key_dict["round"],
+                                )
+                                if preset_key_dict["round"] == 0:
+                                    resampled_value = int(resampled_value)
+                                style_lines_kept[ids][1][key] = str(resampled_value)
+                                lines[line] = "Style: " + ",".join(
+                                    list(style_lines_kept[ids][1].values())
+                                )
+
+            # Resample dialogue margins
+            for idd, (line, dialogue) in enumerate(dialogue_lines):
+                for key in dialogue:
+                    if key in ["MarginL", "MarginR", "MarginV"]:
+                        if int(dialogue[key]) != 0:
+                            dialogue_lines[idd][1][key] = round(
+                                float(dialogue[key]) * ass_resample_mean, 2
+                            )
+                            preset_key_dict = sub_settings[key]
+                            if preset_key_dict:
+                                resampled_value = round(
+                                    float(dialogue_lines[idd][1][key])
+                                    * float(preset_key_dict["factor"]),
+                                    preset_key_dict["round"],
+                                )
+                                if preset_key_dict["round"] == 0:
+                                    resampled_value = int(resampled_value)
+                                dialogue_lines[idd][1][key] = str(resampled_value)
+
+            # Remove unnecessary lines now
+            lines = [
+                el for idx, el in enumerate(lines) if idx not in style_lines_remove
+            ]
+
+            print(list(filter(lambda fn: fn["font_name"] == "Times New Roman", ass[2])))
+            # Overwrite ASS
+            with open(ass[1], "w", encoding=read_file_content["encoding"]) as f:
+                f.write("\n".join(item for item in lines))
 
 
 if __name__ == "__main__":
