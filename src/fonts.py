@@ -88,13 +88,14 @@ class FontFinder:
             The mimetype for the corresponding file extension.
 
         """
+        
         mimes = {
             "ttf": "application/x-truetype-font",
             "otf": "application/vnd.ms-opentype",
             "eot": "application/vnd.ms-fontobject",
         }
 
-        return mimes[file_extension.lower()]
+        return mimes[file_extension.lower().lstrip('.')]
 
     def _rebuild_font_cache(self) -> None:
         """

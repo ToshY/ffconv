@@ -37,7 +37,7 @@ def files_in_dir(file_path, file_types=["*.mkv"]):
     Returns
     -------
     flist : list
-        List of Path objects in specified directory.
+        List of Path objects of specified directory.
 
     """
 

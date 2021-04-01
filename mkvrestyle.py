@@ -11,6 +11,7 @@ python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.
 """
 
 import os
+import shutil
 import re
 import argparse
 import json
@@ -67,6 +68,7 @@ def cli_args():
         "--stream_select",
         type=str,
         required=False,
+        default=['-1'],
         nargs="+",
         help="Stream select by id or 3 letter language code",
     )
@@ -88,7 +90,7 @@ def cli_args():
         help="Overwrite existing file with modified ASS styling",
     )
     args = parser.parse_args()
-
+    
     # Check args count
     user_args = check_args(
         args.input,
@@ -138,22 +140,18 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
                 f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of output arguments ({len_outputs}).[/red]"
             )
 
-    if stream_select is not None:
-        len_stream_select = len(stream_select)
-        if len_stream_select != 1:
-            if len_inputs != len_stream_select:
-                raise Exception(
-                    f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of subtitle stream select arguments ({len_stream_select}).[/red]"
-                )
+    len_stream_select = len(stream_select)
+    if len_stream_select != 1:
+        if len_inputs != len_stream_select:
+            raise Exception(
+                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of subtitle stream select arguments ({len_stream_select}).[/red]"
+            )
 
-            ssdata = []
-            for op in overwrites:
-                ssdata.append(list(op.keys())[0])
-        else:
-            ssdata = [stream_select[0]]
+        ssdata = []
+        for ssp in stream_select:
+            ssdata.append(ssp)
     else:
-        len_stream_select = 0
-        ssdata = ["-1"]
+        ssdata = stream_select[0]
 
     len_spresets = len(spresets)
     if len_spresets != 1:
@@ -179,7 +177,7 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
         for op in overwrites:
             odata.append(list(op.keys())[0])
     else:
-        odata = [overwrites[0]]
+        odata = overwrites[0]
 
     # Prepare inputs/outputs/presets
     batch = {}
@@ -217,61 +215,51 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
                 # Create copies
                 output_files = [output_files for x in range(len(all_files))]
 
-        if len_spresets == 1:
-            subtitle_select_stream = ssdata
-            if ptype == "directory":
-                subtitle_select_stream = [
-                    subtitle_select_stream for x in range(len(all_files))
-                ]
+        if len_stream_select == 1:
+            subtitle_select_stream_data = ssdata
+            subtitle_select_stream_data = [subtitle_select_stream_data for x in range(len(all_files))]
         else:
-            if len_spresets == 0:
-                subtitle_select_stream = ssdata
+            if len_stream_select == 0:
+                subtitle_select_stream_data = ssdata
                 if ptype == "directory":
-                    subtitle_select_stream = [
-                        subtitle_select_stream for x in range(len(all_files))
+                    subtitle_select_stream_data = [
+                        subtitle_select_stream_data for x in range(len(all_files))
                     ]
             else:
-                subtitle_select_stream = ssdata[0]
+                subtitle_select_stream_data = ssdata[0]
                 ssdata.pop(0)
-                if ptype == "directory":
-                    subtitle_select_stream = [
-                        subtitle_select_stream for x in range(len(all_files))
-                    ]
+                subtitle_select_stream_data = [
+                    subtitle_select_stream_data for x in range(len(all_files))
+                ]
 
         if len_spresets == 1:
             subtitle_data = sdata
-            if ptype == "directory":
-                subtitle_data = [subtitle_data for x in range(len(all_files))]
+            subtitle_data = [subtitle_data for x in range(len(all_files))]
         else:
             if len_spresets == 0:
                 subtitle_data = sdata
-                if ptype == "directory":
-                    subtitle_data = [subtitle_data for x in range(len(all_files))]
+                subtitle_data = [subtitle_data for x in range(len(all_files))]
             else:
                 subtitle_data = sdata[0]
                 sdata.pop(0)
-                if ptype == "directory":
-                    subtitle_data = [subtitle_data for x in range(len(all_files))]
+                subtitle_data = [subtitle_data for x in range(len(all_files))]
 
         if len_overwrites == 1:
             overwrite_data = odata
-            if ptype == "directory":
-                overwrite_data = [overwrite_data for x in range(len(all_files))]
+            overwrite_data = [overwrite_data for x in range(len(all_files))]
         else:
             if len_overwrites == 0:
                 overwrite_data = odata
-                if ptype == "directory":
-                    overwrite_data = [overwrite_data for x in range(len(all_files))]
+                overwrite_data = [overwrite_data for x in range(len(all_files))]
             else:
                 overwrite_data = odata[0]
                 odata.pop(0)
-                if ptype == "directory":
-                    overwrite_data = [overwrite_data for x in range(len(all_files))]
+                overwrite_data = [overwrite_data for x in range(len(all_files))]
 
         batch[str(i)] = {
             "input": all_files,
             "output": output_files,
-            "subtitle_stream_select": subtitle_select_stream,
+            "subtitle_stream_select": subtitle_select_stream_data,
             "subtitle_preset": subtitle_data,
             "overwrite": overwrite_data,
         }
@@ -332,8 +320,7 @@ def prepare_track_info(file, index, codec, lang):
     return file.stem + "_track" + str(index) + "_" + lang + subs_mimetype(codec)
 
 
-def extract_subsnfonts(input_file, save_loc, stream_select):
-
+def extract_subsnfonts(input_file, attachments_folder, stream_select):
     # file str
     input_file_str = str(input_file)
 
@@ -374,6 +361,11 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
         if sub["type"] == "subtitles"
     ]
 
+    if not ass_subs:
+        raise Exception(
+            "No subtitle streams found in file! Please make sure the file has atleast 1 subtitle stream."
+        )
+
     # No user input provided, so identify streams and ask for input
     if stream_select == "-1":
         selected_subs = ass_subs[0]["index"]
@@ -406,7 +398,7 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
     selected_subs = next(
         sub for sub in ass_subs if int(sub["index"]) == int(selected_subs)
     )
-    ass_track_path = Path(os.path.join(save_loc, selected_subs["save_file"]))
+    ass_track_path = Path(os.path.join(attachments_folder.parent, selected_subs["save_file"]))
 
     # MKVextract subtitle track
     mkv_subs = [
@@ -424,7 +416,7 @@ def extract_subsnfonts(input_file, save_loc, stream_select):
     available_fonts = FF.fonts
 
     if attachments:
-        font_files, font_files_extract = export_fonts_list(attachments, save_loc)
+        font_files, font_files_extract = export_fonts_list(attachments, attachments_folder)
 
         # MKVextract attachments
         mkv_attachments = [
@@ -451,7 +443,7 @@ def get_available_fonts(fonts_list: dict, font_names_list: list) -> list:
     fonts_available = {}
     for font in font_names_list:
         fonts_available[font] = next(
-            (item for item in fonts_list if item["font_name"] == font), False
+            (item for item in fonts_list if item["font_name"].lower() == font.lower()), False
         )
 
     return fonts_available
@@ -460,7 +452,7 @@ def get_available_fonts(fonts_list: dict, font_names_list: list) -> list:
 def check_available_fonts(fs_fonts: dict, em_fonts: dict, key: str):
     if (fs_fonts[key] is False) & (em_fonts[key] is False):
         raise Exception(
-            "The font `{key}` could not be found on the filesystem and could also not be found as an extracted attachment from the source file."
+            f"The font `{key}` could not be found on either the filesystem or extracted attachment from the source file."
         )
     elif (fs_fonts[key] is False) and (em_fonts[key] is not False):
         main_font = em_fonts[key]
@@ -506,7 +498,6 @@ def main():
     user_args = cli_args()
 
     for x, b in user_args.items():
-        mp = []
         for y, fl in enumerate(b["input"]):
             # Check if first/last item for reporting
             if fl == b["input"][0]:
@@ -516,8 +507,11 @@ def main():
             else:
                 m = None
 
+            output_path = list(b["output"][0].keys())[0]
+            fl_folder = output_path.joinpath(Path(fl).stem)
+
             # Prepare attachments folder path
-            fl_attachments_folder = Path(str(fl.with_suffix("")) + "_attachments")
+            fl_attachments_folder = fl.with_suffix("").joinpath('attachments')
 
             # Create attachments directory
             fl_attachments_folder.mkdir(parents=True, exist_ok=True)
@@ -556,7 +550,7 @@ def main():
             ]
 
             # User styling settings
-            sub_settings = b["subtitle_preset"]
+            sub_settings = b["subtitle_preset"][y]
 
             ffprobe_cmd = [
                 "ffprobe",
@@ -662,14 +656,14 @@ def main():
             # Style font replacement (from ASS styles)
             font_names_kept = [*{*[el[-1]["Fontname"] for el in style_lines_kept]}]
 
+            main_font_preset = None
             # Font replacement; 2 = all; 1 = main; 0 = none
             if font_option == 2:
                 # Preset font availability
                 fonts_filesystem = get_available_fonts(ass[2], [font_name])
                 fonts_embed = get_available_fonts(fonts, [font_name])
 
-                print(fonts_filesystem, fonts_embed, font_name)
-                main_fonts_preset = check_available_fonts(
+                main_font_preset = check_available_fonts(
                     fonts_filesystem, fonts_embed, font_name
                 )
 
@@ -678,7 +672,7 @@ def main():
                 for (line, style) in style_lines:
                     for key in style:
                         if key == "Fontname":
-                            style[key] = main_fonts_preset["font_name"]
+                            style[key] = main_font_preset["font_name"]
 
                     # Change original line to resampled line
                     format_type = dict(it.islice(style.items(), 1))["Format"]
@@ -691,7 +685,7 @@ def main():
                 fonts_filesystem = get_available_fonts(ass[2], [font_name])
                 fonts_embed = get_available_fonts(fonts, [font_name])
 
-                main_fonts_preset = check_available_fonts(
+                main_font_preset = check_available_fonts(
                     fonts_filesystem, fonts_embed, font_name
                 )
 
@@ -728,7 +722,7 @@ def main():
                 for (line, style) in style_lines:
                     for key in style:
                         if (key == "Fontname") & (style[key] == max_occuring_font):
-                            style[key] = main_fonts_preset["font_name"]
+                            style[key] = main_font_preset["font_name"]
 
                     # Change original line to resampled line
                     format_type = dict(it.islice(style.items(), 1))["Format"]
@@ -767,7 +761,24 @@ def main():
             with open(ass[1], "w", encoding=read_file_content["encoding"]) as f:
                 f.write("\n".join(item for item in lines))
 
-            # Remux file back; TODO
+            # If preset font was used, copy it
+            if main_font_preset is not None:
+                if main_font_preset['file_path'].parent != fl_attachments_folder:
+                    shutil.copy(
+                        main_font_preset['file_path'],
+                        fl_attachments_folder.joinpath(main_font_preset['file_name'])
+                    )
+
+            # Copy other fonts into attachment folder
+            for font in main_fonts_ass:
+                if font['file_path'].parent != fl_attachments_folder:
+                    shutil.copy(
+                        font['file_path'],
+                        fl_attachments_folder.joinpath(font['file_name'])
+                    )
+
+            # Remux file back by using `mkvrefont`; TODO
+            print(main_fonts_ass)
 
 
 if __name__ == "__main__":

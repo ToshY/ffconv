@@ -194,3 +194,25 @@ def split_list_of_dicts_by_key(list_of_dicts: list, key: str = "codec_type") -> 
             keys.append(d[key])
 
     return list(result.values()), keys
+
+
+def remove_suffix_from_string(input_string: str, suffix: str) -> str:
+    """
+    Remove substring at end of string
+
+    Parameters
+    ----------
+    input_string : str
+        Input string
+    suffix : str
+        Suffix/substring to remove at end of string
+
+    Returns
+    -------
+    input_string : str
+        Input string without suffix.
+
+    """
+    if suffix and input_string.endswith(suffix):
+        return input_string[:-len(suffix)]
+    return input_string

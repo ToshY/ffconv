@@ -1,0 +1,5 @@
+fonttools==4.18.2
+langcodes==3.1.0
+matplotlib==3.4.1
+pyfiglet==0.8.post1
+rich==9.5.1
