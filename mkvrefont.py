@@ -23,8 +23,11 @@ from src.general import remove_suffix_from_string
 from rich import print
 from rich.prompt import IntPrompt
 from langcodes import standardize_tag
+from src.logger import Logger, ProcessDisplay
+from loguru import logger
 
-def cli_args():
+
+def cli_args(args=None):
     """
     Command Line argument parser
 
@@ -66,20 +69,24 @@ def cli_args():
         "--mode",
         type=str,
         required=True,
-        choices=['add', 'replace'],
-        default='replace',
+        choices=["add", "replace"],
+        default=["replace"],
         nargs="+",
         help="Mode to add attachments to existing file or remove existing attachments and add new attachments",
     )
-
-    args = parser.parse_args()
-
-    # Check args count
-    user_args = check_args(
-        args.input, args.output, args.mode
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Verbose logging",
     )
 
-    return user_args
+    if args is not None:
+        args = parser.parse_args(args)
+    else:
+        args = parser.parse_args()
+
+    # Check args
+    user_args = check_args(args.input, args.output, args.mode)
+
+    return user_args, args.verbose
 
 
 def check_args(inputs, outputs, mode):
@@ -114,7 +121,7 @@ def check_args(inputs, outputs, mode):
     if len_inputs != len_outputs:
         if len_outputs != 1:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) "
+                f"Amount of input arguments ({len_inputs}) "
                 "does not equal the amount of output arguments ({len_outputs})."
             )
 
@@ -123,7 +130,7 @@ def check_args(inputs, outputs, mode):
         if len_mode != 1:
             if len_inputs != len_mode:
                 raise Exception(
-                    f"[red]Amount of input arguments ({len_inputs}) "
+                    f"Amount of input arguments ({len_inputs}) "
                     "does not equal the amount of mode arguments ({len_mode})."
                 )
 
@@ -158,7 +165,7 @@ def check_args(inputs, outputs, mode):
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
                     raise Exception(
-                        f"The path `{str(cpath)}` contains"
+                        f"The path `{cpath.as_posix()}` contains"
                         f" `{len_all_files_in_batch}` files but only"
                         f" `{len_outputs}`"
                         f" output filename(s) was/were specified."
@@ -176,8 +183,7 @@ def check_args(inputs, outputs, mode):
 
         if len_mode == 1:
             mode_data = mdata
-            if ptype == "directory":
-                mode_data = [mode_data for x in range(len(all_files))]
+            mode_data = [mode_data for x in range(len(all_files))]
         else:
             if len_mode == 0:
                 mode_data = mdata
@@ -185,8 +191,7 @@ def check_args(inputs, outputs, mode):
             else:
                 mode_data = mdata[0]
                 mdata.pop(0)
-                if ptype == "directory":
-                    mode_data = [mode_data for x in range(len(all_files))]
+                mode_data = [mode_data for x in range(len(all_files))]
 
         batch[str(i)] = {
             "input": all_files,
@@ -195,7 +200,6 @@ def check_args(inputs, outputs, mode):
         }
 
     return batch
-
 
 
 def remux_file(input_file, output_dir, new_file_suffix=" (1)"):
@@ -225,56 +229,55 @@ def remux_file(input_file, output_dir, new_file_suffix=" (1)"):
     output_file_name = input_file.stem + new_file_suffix + input_file.suffix
 
     # File attachments/subtitles directory
-    file_attachments_dir = input_file.with_suffix('')
-    if file_attachments_dir.as_posix().endswith('_stripped'):
-        file_attachments_dir = Path(remove_suffix_from_string(file_attachments_dir.as_posix(), '_stripped'))
-        output_file_name = file_attachments_dir.stem + new_file_suffix + input_file.suffix
+    file_attachments_dir = input_file.with_suffix("")
+    if file_attachments_dir.as_posix().endswith("_stripped"):
+        file_attachments_dir = Path(
+            remove_suffix_from_string(file_attachments_dir.as_posix(), "_stripped")
+        )
+        output_file_name = (
+            file_attachments_dir.stem + new_file_suffix + input_file.suffix
+        )
 
     if not file_attachments_dir.exists():
-        raise Exception(f'The file does not have a corresponding directory `{file_attachments_dir}`!')
+        raise Exception(
+            f"The file does not have a corresponding directory `{file_attachments_dir}`!"
+        )
 
     # Fonts directory
-    file_attachments_font_dir = file_attachments_dir.joinpath('attachments')
+    file_attachments_font_dir = file_attachments_dir.joinpath("attachments")
     if not file_attachments_font_dir.exists():
-        raise Exception(f"No `attachments` folder found in `{file_attachments_dir}`! Please put your fonts in an `attachments` folder.")
+        raise Exception(
+            f"No `attachments` folder found in `{file_attachments_dir}`! Please put your fonts in an `attachments` folder."
+        )
 
     # Read font files
-    fonts = files_in_dir(file_attachments_font_dir, ['*.ttf', '*.otf', '*.eot'])
+    fonts = files_in_dir(file_attachments_font_dir, ["*.ttf", "*.otf", "*.eot"])
 
     # Get MKV font arguments
     mkv_fonts = font_attachments(fonts)
-    
+
     # Read subtitles files
-    subtitles = files_in_dir(file_attachments_dir, ['*.ass', '*.srt'])
-    
+    subtitles = files_in_dir(file_attachments_dir, ["*.ass", "*.srt"])
+
     # Get MKV subtitle arguments
     mkv_subtitles = subtitle_attachments(subtitles)
-    
+
     # Prepare output file
     if output_type == "directory":
         output_file = output_path.joinpath(output_file_name).as_posix()
     else:
         output_file = output_path.with_suffix("").as_posix()
 
-    mkvmuxe_cmd = [
-        "mkvmerge",
-        "--output",
-        output_file,
-        "(",
-        input_file.as_posix(),
-        ")",
-    ] + mkv_subtitles + mkv_fonts
-    
-    print("> The following MKVmerge remux command will be executed:\r")
-    print(f"[green]{' '.join(mkvmuxe_cmd)}[/green]")
-    print(f"\r> MKVmerge [cyan]running...[/cyan]", end="\r")
-    cprocess = sp.run(mkvmuxe_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    return_code = cprocess.returncode
-    if return_code != 0:
-        raise Exception(f"MKVmerge returned exit code `{return_code}`.")
-    print("> MKVmerge [green]completed[/green]!\r\n")
+    mkvremux_cmd = (
+        ["mkvmerge", "--output", output_file, "(", input_file.as_posix(), ")",]
+        + mkv_subtitles
+        + mkv_fonts
+    )
 
-    return mkvmuxe_cmd
+    process = ProcessDisplay(logger)
+    result = process.run("MKVmerge remux", mkvremux_cmd)
+
+    return mkvremux_cmd
 
 
 def strip_file_attachments(input_file: Path) -> Path:
@@ -296,13 +299,15 @@ def strip_file_attachments(input_file: Path) -> Path:
     None.
 
     """
-    
-    temp_file_path = input_file.parent.joinpath(input_file.stem + '_stripped' +  input_file.suffix)
-    
+
+    temporary_file = input_file.parent.joinpath(
+        input_file.stem + "_stripped" + input_file.suffix
+    )
+
     mkvmerge_cmd = [
         "mkvmerge",
         "--output",
-        temp_file_path.as_posix(),
+        temporary_file.as_posix(),
         "--no-subtitles",
         "--no-attachments",
         "--no-chapters",
@@ -313,17 +318,10 @@ def strip_file_attachments(input_file: Path) -> Path:
         ")",
     ]
 
-    print("> The following MKVmerge strip command will be executed:\r")
-    print(f"[green]{' '.join(mkvmerge_cmd)}[/green]")
+    process = ProcessDisplay(logger)
+    result = process.run("MKVmerge strip", mkvmerge_cmd)
 
-    print(f"\r> MKVmerge [cyan]running...[/cyan]", end="\r")
-    cprocess = sp.run(mkvmerge_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    return_code = cprocess.returncode
-    if return_code != 0:
-        raise Exception(f"MKVmerge returned exit code `{return_code}`.")
-    print("> MKVmerge [green]completed[/green]!\r\n")
-    
-    return temp_file_path
+    return temporary_file
 
 
 def font_attachments(fonts_list):
@@ -354,6 +352,7 @@ def font_attachments(fonts_list):
 
     return mkv_fonts
 
+
 def subtitle_attachments(subtitle_list):
     """
 
@@ -373,22 +372,25 @@ def subtitle_attachments(subtitle_list):
     for subtitle in subtitle_list:
         mkv_subtitles = mkv_subtitles + [
             "--language",
-            "0:" + standardize_tag(subtitle.with_suffix('').as_posix()[-3:]),
+            "0:" + standardize_tag(subtitle.with_suffix("").as_posix()[-3:]),
             "(",
             subtitle.as_posix(),
-            ")"
+            ")",
         ]
 
     return mkv_subtitles
 
-def main():
+
+@logger.catch
+def main(custom_args=None):
     # Input arguments
-    inputs = cli_args()
-    
-    # FFprobe
-    for x, b in inputs.items():
-        bn = []
-        mp = []
+    user_args, verbose = cli_args(custom_args)
+
+    # Logger
+    global logger
+    logger = Logger(Path(__file__).stem, verbose).logger
+
+    for x, b in user_args.items():
         for y, fl in enumerate(b["input"]):
             # Check if first/last item for reporting
             if fl == b["input"][0]:
@@ -397,13 +399,13 @@ def main():
                 m = 1
             else:
                 m = None
-                
+
             # In replace mode, strip subtitles, attachments, tags and chapters
-            if b['mode'][0] == 'replace':
+            if b["mode"][y] == "replace":
                 fl = strip_file_attachments(fl)
 
             # Remux file attachments
-            remux_file(fl, b['output'])
+            remux_file(fl, b["output"])
 
 
 if __name__ == "__main__":
@@ -412,7 +414,8 @@ if __name__ == "__main__":
 
     # Stop execution at keyboard input
     try:
-        resl = main()
+        # Call main
+        main_result = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         exit()

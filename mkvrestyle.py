@@ -17,18 +17,22 @@ import argparse
 import json
 import itertools as it
 import subprocess as sp
+import mkvrefont
 from collections import Counter
 from pathlib import Path
 from src.banner import cli_banner
 from src.table import table_print_stream_options
 from src.args import FileDirectoryCheck, files_in_dir
 from src.general import read_file, read_json, remove_empty_dict_values
+from src.logger import Logger, ProcessDisplay
 from src.fonts import FontFinder
+from src.exception import *
 from rich import print
 from rich.prompt import IntPrompt
+from loguru import logger
 
 
-def cli_args():
+def cli_args(args=None):
     """
     Command Line argument parser.
 
@@ -68,7 +72,7 @@ def cli_args():
         "--stream_select",
         type=str,
         required=False,
-        default=['-1'],
+        default=["-1"],
         nargs="+",
         help="Stream select by id or 3 letter language code",
     )
@@ -89,9 +93,16 @@ def cli_args():
         nargs="+",
         help="Overwrite existing file with modified ASS styling",
     )
-    args = parser.parse_args()
-    
-    # Check args count
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Verbose logging",
+    )
+
+    if args is not None:
+        args = parser.parse_args(args)
+    else:
+        args = parser.parse_args()
+
+    # Check args
     user_args = check_args(
         args.input,
         args.output,
@@ -100,7 +111,7 @@ def cli_args():
         args.overwrite,
     )
 
-    return user_args
+    return user_args, args.verbose
 
 
 def check_args(inputs, outputs, stream_select, spresets, overwrites):
@@ -137,14 +148,16 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
     if len_inputs != len_outputs:
         if len_outputs != 1:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of output arguments ({len_outputs}).[/red]"
+                f"Amount of input arguments ({len_inputs}) "
+                "does not equal the amount of output arguments ({len_outputs})."
             )
 
     len_stream_select = len(stream_select)
     if len_stream_select != 1:
         if len_inputs != len_stream_select:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of subtitle stream select arguments ({len_stream_select}).[/red]"
+                f"Amount of input arguments ({len_inputs}) "
+                "does not equal the amount of subtitle stream select arguments ({len_stream_select})."
             )
 
         ssdata = []
@@ -157,7 +170,8 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
     if len_spresets != 1:
         if len_inputs != len_spresets:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) does not equal the amount of subtitle preset arguments ({len_spresets}).[/red]"
+                f"Amount of input arguments ({len_inputs}) "
+                "does not equal the amount of subtitle preset arguments ({len_spresets})."
             )
 
         sdata = []
@@ -170,7 +184,7 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
     if len_overwrites != 1:
         if len_inputs != len_overwrites:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) does not equal amount of overwritable arguments ({len_overwrites}).[/red]"
+                f"Amount of input arguments ({len_inputs}) does not equal amount of overwritable arguments ({len_overwrites})."
             )
 
         odata = []
@@ -217,7 +231,9 @@ def check_args(inputs, outputs, stream_select, spresets, overwrites):
 
         if len_stream_select == 1:
             subtitle_select_stream_data = ssdata
-            subtitle_select_stream_data = [subtitle_select_stream_data for x in range(len(all_files))]
+            subtitle_select_stream_data = [
+                subtitle_select_stream_data for x in range(len(all_files))
+            ]
         else:
             if len_stream_select == 0:
                 subtitle_select_stream_data = ssdata
@@ -290,9 +306,11 @@ def get_lines_per_format(my_lines):
     ]
     format_lines = format_line_style + format_line_dialogue
     if len(format_lines) > 2:
-        raise Exception(
+        logger.critical(
             "Invalid ASS syntax. The original ASS contains more than 2 format lines in total."
         )
+        raise InvalidSubtitleFormatLines
+
     return {"style": format_lines[0], "dialogue": format_lines[1]}
 
 
@@ -324,17 +342,20 @@ def extract_subsnfonts(input_file, attachments_folder, stream_select):
     # file str
     input_file_str = str(input_file)
 
-    mkv_cmd = [
+    mkvidentify_cmd = [
         "mkvmerge",
         "--identify",
         "--identification-format",
         "json",
         input_file_str,
     ]
-    cprocess = sp.run(mkv_cmd, capture_output=True)
+
+    # MKV identify
+    process = ProcessDisplay(logger)
+    result = process.run("MKVmerge identify", mkvidentify_cmd)
 
     # Json output
-    mkvout = json.loads(cprocess.stdout)
+    mkvout = json.loads(result.stdout)
 
     # Get attachments
     attachments = mkvout["attachments"]
@@ -362,9 +383,10 @@ def extract_subsnfonts(input_file, attachments_folder, stream_select):
     ]
 
     if not ass_subs:
-        raise Exception(
+        logger.critical(
             "No subtitle streams found in file! Please make sure the file has atleast 1 subtitle stream."
         )
+        raise SubtitleNotFoundError
 
     # No user input provided, so identify streams and ask for input
     if stream_select == "-1":
@@ -398,16 +420,20 @@ def extract_subsnfonts(input_file, attachments_folder, stream_select):
     selected_subs = next(
         sub for sub in ass_subs if int(sub["index"]) == int(selected_subs)
     )
-    ass_track_path = Path(os.path.join(attachments_folder.parent, selected_subs["save_file"]))
+    ass_track_path = Path(
+        os.path.join(attachments_folder.parent, selected_subs["save_file"])
+    )
 
     # MKVextract subtitle track
-    mkv_subs = [
+    mkvextract_subs_cmd = [
         "mkvextract",
         "tracks",
         input_file_str,
         f'{selected_subs["index"]}:{ass_track_path}',
     ]
-    mkv_subs_output = sp.check_output(mkv_subs)
+
+    process = ProcessDisplay(logger)
+    result = process.run("MKVextract subtitle", mkvextract_subs_cmd)
 
     # To export fonts
     FF = FontFinder()
@@ -416,15 +442,19 @@ def extract_subsnfonts(input_file, attachments_folder, stream_select):
     available_fonts = FF.fonts
 
     if attachments:
-        font_files, font_files_extract = export_fonts_list(attachments, attachments_folder)
+        font_files, font_files_extract = export_fonts_list(
+            attachments, attachments_folder
+        )
 
         # MKVextract attachments
-        mkv_attachments = [
+        mkvextract_attachments_cmd = [
             "mkvextract",
             "attachments",
             input_file_str,
         ] + font_files_extract
-        mkv_attachments_output = sp.check_output(mkv_attachments)
+
+        process = ProcessDisplay(logger)
+        result = process.run("MKVextract attachments", mkvextract_attachments_cmd)
 
         # Get current fonts
         font_info = [
@@ -443,7 +473,8 @@ def get_available_fonts(fonts_list: dict, font_names_list: list) -> list:
     fonts_available = {}
     for font in font_names_list:
         fonts_available[font] = next(
-            (item for item in fonts_list if item["font_name"].lower() == font.lower()), False
+            (item for item in fonts_list if item["font_name"].lower() == font.lower()),
+            False,
         )
 
     return fonts_available
@@ -451,9 +482,10 @@ def get_available_fonts(fonts_list: dict, font_names_list: list) -> list:
 
 def check_available_fonts(fs_fonts: dict, em_fonts: dict, key: str):
     if (fs_fonts[key] is False) & (em_fonts[key] is False):
-        raise Exception(
+        logger.critical(
             f"The font `{key}` could not be found on either the filesystem or extracted attachment from the source file."
         )
+        raise FontNotFoundError
     elif (fs_fonts[key] is False) and (em_fonts[key] is not False):
         main_font = em_fonts[key]
     elif (fs_fonts[key] is not False) and (em_fonts[key] is False):
@@ -493,9 +525,14 @@ def resample_mean(dimensions_list_one, dimensions_list_two):
     return mean_factor
 
 
-def main():
+@logger.catch
+def main(custom_args=None):
     # Input arguments
-    user_args = cli_args()
+    user_args, verbose = cli_args(custom_args)
+
+    # Logger
+    global logger
+    logger = Logger(Path(__file__).stem, verbose).logger
 
     for x, b in user_args.items():
         for y, fl in enumerate(b["input"]):
@@ -507,11 +544,11 @@ def main():
             else:
                 m = None
 
-            output_path = list(b["output"][0].keys())[0]
+            output_path = list(b["output"][y].keys())[0]
             fl_folder = output_path.joinpath(Path(fl).stem)
 
             # Prepare attachments folder path
-            fl_attachments_folder = fl.with_suffix("").joinpath('attachments')
+            fl_attachments_folder = fl.with_suffix("").joinpath("attachments")
 
             # Create attachments directory
             fl_attachments_folder.mkdir(parents=True, exist_ok=True)
@@ -566,10 +603,11 @@ def main():
             ]
 
             # Get video dimensions
-            cprocess = sp.run(ffprobe_cmd, capture_output=True)
+            process = ProcessDisplay(logger)
+            result = process.run("FFprobe", ffprobe_cmd)
 
             # Json output
-            ffdims = json.loads(cprocess.stdout)["streams"][0]
+            ffdims = json.loads(result.stdout)["streams"][0]
             ffdims["PlayResX"] = ffdims.pop("width")
             ffdims["PlayResY"] = ffdims.pop("height")
 
@@ -644,7 +682,7 @@ def main():
             font_settings = sub_settings["FontName"]
             font_name = font_settings["name"]
             if not isinstance(font_name, str):
-                raise Exception(
+                logger.critical(
                     f"Invalid font name `{font_name}` provided. Please provide and empty string or valid font name."
                 )
 
@@ -763,22 +801,24 @@ def main():
 
             # If preset font was used, copy it
             if main_font_preset is not None:
-                if main_font_preset['file_path'].parent != fl_attachments_folder:
+                if main_font_preset["file_path"].parent != fl_attachments_folder:
                     shutil.copy(
-                        main_font_preset['file_path'],
-                        fl_attachments_folder.joinpath(main_font_preset['file_name'])
+                        main_font_preset["file_path"],
+                        fl_attachments_folder.joinpath(main_font_preset["file_name"]),
                     )
 
             # Copy other fonts into attachment folder
             for font in main_fonts_ass:
-                if font['file_path'].parent != fl_attachments_folder:
+                if font["file_path"].parent != fl_attachments_folder:
                     shutil.copy(
-                        font['file_path'],
-                        fl_attachments_folder.joinpath(font['file_name'])
+                        font["file_path"],
+                        fl_attachments_folder.joinpath(font["file_name"]),
                     )
 
             # Remux file back by using `mkvrefont`; TODO
-            print(main_fonts_ass)
+            resl = mkvrefont.main(
+                ["-i", fl.as_posix(), "-o", output_path.as_posix(), "-m", "replace"]
+            )
 
 
 if __name__ == "__main__":
@@ -787,7 +827,8 @@ if __name__ == "__main__":
 
     # Stop execution at keyboard input
     try:
-        resl = main()
+        # Call main
+        main_result = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         exit()

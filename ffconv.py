@@ -25,9 +25,11 @@ from src.general import (
 )
 from rich import print
 from rich.prompt import IntPrompt
+from src.logger import Logger, ProcessDisplay
+from loguru import logger
 
 
-def cli_args():
+def cli_args(args=None):
     """
     Command Line argument parser.
 
@@ -90,14 +92,21 @@ def cli_args():
         nargs="+",
         help="Path to JSON file with FFmpeg audio preset options",
     )
-    args = parser.parse_args()
-
-    # Check args count
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Verbose logging",
+    )
+    
+    if args is not None:
+        args = parser.parse_args(args)
+    else:
+        args = parser.parse_args()
+        
+    # Check args
     user_args = check_args(
         args.input, args.output, args.video_preset, args.audio_preset
     )
 
-    return user_args, args.input, args.extension
+    return user_args, args.input, args.extension, args.verbose
 
 
 def check_args(inputs, outputs, vpresets, apresets):
@@ -132,7 +141,7 @@ def check_args(inputs, outputs, vpresets, apresets):
     if len_inputs != len_outputs:
         if len_outputs != 1:
             raise Exception(
-                f"[red]Amount of input arguments ({len_inputs}) "
+                f"Amount of input arguments ({len_inputs}) "
                 "does not equal the amount of output arguments ({len_outputs})."
             )
 
@@ -141,7 +150,7 @@ def check_args(inputs, outputs, vpresets, apresets):
         if len_vpresets != 1:
             if len_inputs != len_vpresets:
                 raise Exception(
-                    f"[red]Amount of input arguments ({len_inputs}) "
+                    f"Amount of input arguments ({len_inputs}) "
                     "does not equal the amount of video preset arguments ({len_vpresets})."
                 )
 
@@ -177,7 +186,7 @@ def check_args(inputs, outputs, vpresets, apresets):
         if len_apresets != 1:
             if len_inputs != len_apresets:
                 raise Exception(
-                    f"[red]Amount of input arguments ({len_inputs}) "
+                    f"Amount of input arguments ({len_inputs}) "
                     "does not equal the amount of video preset arguments ({len_apresets})."
                 )
 
@@ -214,7 +223,7 @@ def check_args(inputs, outputs, vpresets, apresets):
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
                     raise Exception(
-                        f"The path `{str(cpath)}` contains"
+                        f"The path `{cpath.as_posix()}` contains"
                         f" `{len_all_files_in_batch}` files but only"
                         f" `{len_outputs}`"
                         f" output filename(s) was/were specified."
@@ -295,7 +304,9 @@ def check_streams_order(ffprobe_result):
         sc = st["count"]
         if tcount[:sc] != [cs["id"] for cs in st["streams"]]:
             raise Exception(
-                "The stream orders are not standarized. Please run `mkvremux.py` to sort the streams automatically with appropriate ordering."
+                "The stream orders are not standarized. "
+                "Please run `mkvremux.py` to sort the streams "
+                "automatically with appropriate ordering."
             )
 
         del tcount[:sc]
@@ -447,10 +458,11 @@ def probe_file(input_file, idx, original_batch, mark):
         str(input_file),
     ]
 
-    mkvidentify_process = sp.run(mkvidentify_cmd, capture_output=True)
+    process = ProcessDisplay(logger)
+    result = process.run("MKVmerge identify", mkvidentify_cmd)
 
     # Json output
-    mkvidentify_out = json.loads(mkvidentify_process.stdout)
+    mkvidentify_out = json.loads(result.stdout)
     if mkvidentify_out["errors"]:
         raise Exception(
             'MKVidentify encountered the following error: "{}"'.format(
@@ -570,17 +582,9 @@ def convert_file(
         + a_data
         + ["-movflags", "faststart", output_file]
     )
-
-    print("> The following FFmpeg command will be executed:\r\n")
-    print(f"[green]{' '.join(ffmpeg_cmd)}[/green]")
-
-    print(f"\r\n> FFmpeg conversion [cyan]running...[/cyan]", end="\r")
-    cprocess = sp.run(ffmpeg_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    return_code = cprocess.returncode
-    print("> FFmpeg conversion [green]completed[/green]!\r\n")
-
-    if return_code != 0:
-        raise Exception(f"[red]FFmpeg returned exit code `{return_code}`.[/red]")
+    
+    process = ProcessDisplay(logger)
+    result = process.run("FFmpeg convert", ffmpeg_cmd)
 
     if mark == 1:
         print(f"\r\n> FFmpeg batch complete for [cyan]`{original_batch_name}`[/cyan]")
@@ -588,9 +592,14 @@ def convert_file(
     return None
 
 
-def main():
+@logger.catch
+def main(custom_args=None):
     # Input arguments
-    user_args, original_input, extension = cli_args()
+    user_args, original_input, extension, verbose = cli_args(custom_args)
+
+    # Logger
+    global logger
+    logger = Logger(Path(__file__).stem, verbose).logger
 
     # FFprobe
     for x, b in user_args.items():
@@ -646,7 +655,7 @@ if __name__ == "__main__":
 
     # Stop execution at keyboard input
     try:
-        batches = main()
+        main_result = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         exit()

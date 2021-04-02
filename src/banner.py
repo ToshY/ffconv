@@ -9,10 +9,9 @@ import pyfiglet
 from pathlib import Path
 from rich import print
 
+
 def cli_banner(
-    current_file: str,
-    banner_font: str = "isometric3",
-    banner_width: int = 200
+    current_file: str, banner_font: str = "isometric3", banner_width: int = 200
 ) -> None:
     """
     CLI banner
@@ -31,7 +30,7 @@ def cli_banner(
     None.
 
     """
-    banner = pyfiglet.figlet_format(
-        Path(current_file).stem, font=banner_font, width=banner_width
-    )
+    file_name = Path(current_file).stem
+
+    banner = pyfiglet.figlet_format(file_name, font=banner_font, width=banner_width)
     print(f"[bold magenta]{banner}[/bold magenta]")

@@ -9,7 +9,9 @@ import argparse
 import mimetypes
 from pathlib import Path
 from rich.traceback import install
+
 install()
+
 
 def current_working_dir():
     """
@@ -95,7 +97,9 @@ class FileDirectoryCheck(argparse.Action):
                     all_values.append({p: "directory"})
             else:
                 if not p.exists():
-                    raise FileNotFoundError(f"The specificed path `{fl}` does not exist.")
+                    raise FileNotFoundError(
+                        f"The specificed path `{fl}` does not exist."
+                    )
                 if p.is_file():
                     all_values.append({p: "file"})
                 else:

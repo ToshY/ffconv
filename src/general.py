@@ -214,5 +214,5 @@ def remove_suffix_from_string(input_string: str, suffix: str) -> str:
 
     """
     if suffix and input_string.endswith(suffix):
-        return input_string[:-len(suffix)]
+        return input_string[: -len(suffix)]
     return input_string

@@ -25,10 +25,12 @@ from src.general import (
     dict_to_tuple,
     split_list_of_dicts_by_key,
 )
+from src.logger import Logger, ProcessDisplay
 from rich import print
+from loguru import logger
 
 
-def cli_args():
+def cli_args(args=None):
     """
     Command Line argument parser
 
@@ -68,18 +70,21 @@ def cli_args():
     )
 
     parser.add_argument(
-        "-s",
-        "--sort",
-        type=str,
-        required=False,
-        nargs="+",
-        help="Sorting tags",
+        "-s", "--sort", type=str, required=False, nargs="+", help="Sorting tags",
     )
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Verbose logging",
+    )
+
+    if args is not None:
+        args = parser.parse_args(args)
+    else:
+        args = parser.parse_args()
 
     args = parser.parse_args()
     user_args = check_args(args.input, args.output, args.sort)
 
-    return user_args, args.input
+    return user_args, args.input, args.verbose
 
 
 def check_args(inputs, outputs, sorts):
@@ -158,7 +163,7 @@ def check_args(inputs, outputs, sorts):
             if ptype == "directory":
                 if len_all_files_in_batch > len_outputs and output_type == "file":
                     raise Exception(
-                        f"The path `{str(cpath)}` contains"
+                        f"The path `{cpath.as_posix()}` contains"
                         f" `{len_all_files_in_batch}`files but only"
                         f" `{len_outputs}`"
                         f" output filename(s) was/were specified."
@@ -231,11 +236,12 @@ def probe_file(input_file, idx, original_batch, mark):
         "json",
         str(input_file),
     ]
-
-    mkvidentify_process = sp.run(mkvidentify_cmd, capture_output=True)
+    
+    process = ProcessDisplay(logger)
+    result = process.run("MKVmerge identify", mkvidentify_cmd)
 
     # Json output
-    mkvidentify_out = json.loads(mkvidentify_process.stdout)
+    mkvidentify_out = json.loads(result.stdout)
     if mkvidentify_out["errors"]:
         raise Exception(
             'MKVidentify encountered the following error: "{}"'.format(
@@ -267,12 +273,7 @@ def probe_file(input_file, idx, original_batch, mark):
 
 
 def remux_file(
-    input_file,
-    track_order,
-    output_dir,
-    original_batch,
-    mark,
-    new_file_suffix=" (1)",
+    input_file, track_order, output_dir, original_batch, mark, new_file_suffix=" (1)",
 ):
     """
     Remuxing file with logically resorting of indices to comply with the
@@ -333,16 +334,9 @@ def remux_file(
         "--track-order",
         track_order_args,
     ]
-
-    print("> The following MKVmerge command will be executed:\r")
-    print(f"[green]{' '.join(mkvmerge_cmd)}[/green]")
-
-    print(f"\r> MKVmerge [cyan]running...[/cyan]", end="\r")
-    cprocess = sp.run(mkvmerge_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-    return_code = cprocess.returncode
-    if return_code != 0:
-        raise Exception(f"MKVmerge returned exit code `{return_code}`.")
-    print("> MKVmerge [green]completed[/green]!\r\n")
+    
+    process = ProcessDisplay(logger)
+    result = process.run("MKVmerge sorting", mkvmerge_cmd)
 
     if mark == 1:
         print(f"> MKVmerge batch complete for [cyan]`{original_batch_name}`[/cyan]")
@@ -384,9 +378,14 @@ def multisort(xs, specs):
     return xs
 
 
-def main():
+@logger.catch
+def main(custom_args=None):
     # Input arguments
-    user_args, original_input = cli_args()
+    user_args, original_input, verbose = cli_args(custom_args)
+
+    # Logger
+    global logger
+    logger = Logger(Path(__file__).stem, verbose).logger
 
     # Batching
     for x, b in user_args.items():
@@ -454,7 +453,7 @@ if __name__ == "__main__":
 
     # Stop execution at keyboard input
     try:
-        main()
+        main_result = main()
     except KeyboardInterrupt:
         print("\r\n\r\n> [red]Execution cancelled by user[/red]")
         exit()
