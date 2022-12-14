@@ -1,14 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Oct  8 23:03:08 2020
-
-@author: ToshY
-
-MKVremux - Remuxing MKV files to appropriate stream ordering
-
-# Example
-python mkvremux.py -i "input/file.mkv" -o "output" -s "preset/sort_preset.json"
-"""
 
 import json
 import numpy as np

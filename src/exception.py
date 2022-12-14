@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Apr  2 15:04:43 2021
-
-@author: ToshY
-"""
 
 
 class FontNotFoundError(Exception):

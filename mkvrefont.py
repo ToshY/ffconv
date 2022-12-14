@@ -1,14 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Oct 28 20:57:11 2020
-
-@author: ToshY
-
-MKVfonts - Remuxing attachments from folder into MKV
-
-# Example
-python mkvattach.py -i "./input/myfile.mkv" -o "./output" -f "./input/fonts"
-"""
 
 import sys
 import argparse

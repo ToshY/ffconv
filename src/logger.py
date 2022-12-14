@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Apr  2 13:17:50 2021
-
-@author: ToshY
-"""
 
 import sys
 import subprocess as sp

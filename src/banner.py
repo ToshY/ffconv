@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Dec  12 20:52:08 2020
-
-@author: ToshY
-"""
 
 import pyfiglet
 from pathlib import Path

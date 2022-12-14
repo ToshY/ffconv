@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Nov 23 20:45:00 2020
-
-@author: ToshY
-
 Cross-platform checking of (unique) installed fonts.
 
 Returns list of dictonaries, where each dictonary denotes a single font, with a Path object,

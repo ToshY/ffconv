@@ -1,14 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sat Nov 14 17:11:27 2020
-
-@author: ToshY
-
-MKVrestyle - Restyle the main font styling of the embedded ASS file
-
-# Example
-python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.json"
-"""
 
 import os
 import shutil

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Dec  12 20:52:08 2020
-
-@author: ToshY
-"""
 
 from rich.console import Console
 from rich.table import Table
@@ -16,7 +11,7 @@ def table_print_stream_options(tracks: list) -> None:
     Parameters
     ----------
     tracks : list
-        A list of dictonaries with specific stream values.
+        A list of dictionaries with specific stream values.
 
     Returns
     -------
