@@ -11,6 +11,7 @@ from src.general import (
     read_json,
     remove_empty_dict_values,
     dict_to_list,
+    list_to_dict,
     split_list_of_dicts_by_key,
 )
 from rich import print
@@ -602,11 +603,11 @@ def convert_file(
 
     # Additional filter complex; added due to possible issues when subtitles use BT.709 color space.
     filter_complex_data_before = filter_complex_preset_data["before"]
-    if not (filter_complex_data_before and not filter_complex_data_before.isspace()):
+    if len(filter_complex_data_before.strip()):
         filter_complex_data_before = f"{filter_complex_data_before},"
 
     filter_complex_data_after = filter_complex_preset_data["after"]
-    if not (filter_complex_data_after and not filter_complex_data_after.isspace()):
+    if len(filter_complex_data_after.strip()):
         filter_complex_data_after = f",{filter_complex_data_after}"
 
     filter_complex_map_complete = f"{filter_complex_data_before}{filter_complex_map}{filter_complex_data_after}"
@@ -694,7 +695,7 @@ def main(custom_args=None):
                 b["stream_mapping"][z],
                 b["video_preset"][z],
                 b["audio_preset"][z],
-                b["filter_complex_preset"][z],
+                list_to_dict(b["filter_complex_preset"][z]),
                 original_input[int(x)],
                 b["nr_in_batch"][z],
             )
