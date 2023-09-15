@@ -604,11 +604,11 @@ def convert_file(
     # Additional filter complex; added due to possible issues when subtitles use BT.709 color space.
     filter_complex_data_before = filter_complex_preset_data["before"]
     if len(filter_complex_data_before.strip()):
-        filter_complex_data_before = f"{filter_complex_data_before},"
+        filter_complex_data_before = f"{filter_complex_data_before}"
 
     filter_complex_data_after = filter_complex_preset_data["after"]
     if len(filter_complex_data_after.strip()):
-        filter_complex_data_after = f",{filter_complex_data_after}"
+        filter_complex_data_after = f"{filter_complex_data_after}"
 
     filter_complex_map_complete = f"{filter_complex_data_before}{filter_complex_map}{filter_complex_data_after}"
 
