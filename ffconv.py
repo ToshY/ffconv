@@ -602,11 +602,11 @@ def convert_file(
     filter_complex_map = "subtitles='" + lit_file + "':si=" + str(mapping["subtitles"])
 
     # Additional filter complex; added due to possible issues when subtitles use BT.709 color space.
-    filter_complex_data_before = filter_complex_preset_data["before"]
+    filter_complex_data_before = filter_complex_preset_data.get("before", "")
     if len(filter_complex_data_before.strip()):
         filter_complex_data_before = f"{filter_complex_data_before}"
 
-    filter_complex_data_after = filter_complex_preset_data["after"]
+    filter_complex_data_after = filter_complex_preset_data.get("after", "")
     if len(filter_complex_data_after.strip()):
         filter_complex_data_after = f"{filter_complex_data_after}"
 
