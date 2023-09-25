@@ -191,7 +191,7 @@ def check_args(inputs, outputs, vpresets, apresets, fcpresets):
             if len_inputs != len_apresets:
                 raise Exception(
                     f"Amount of input arguments ({len_inputs}) "
-                    f"does not equal the amount of video preset arguments ({len_apresets})."
+                    f"does not equal the amount of audio preset arguments ({len_apresets})."
                 )
 
             adata = []
