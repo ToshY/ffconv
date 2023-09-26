@@ -627,7 +627,7 @@ def convert_file(
                 str(input_file),
                 "-metadata",
                 "title=" + input_file.stem,
-                "-metadata=",
+                "-metadata",
                 "encoded_at=" + current_datetime.strftime("%Y-%m-%d %H:%M:%S"),
                 "-map",
                 v_map,
