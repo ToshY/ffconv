@@ -628,7 +628,7 @@ def convert_file(
                 "-metadata",
                 "title=" + input_file.stem,
                 "-metadata",
-                "encoded_at=" + current_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                f'comment=Encoded on {current_datetime.strftime("%Y-%m-%d %H:%M:%S")}',
                 "-map",
                 v_map,
                 "-map",
