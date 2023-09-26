@@ -3,6 +3,7 @@
 import argparse
 import json
 import subprocess as sp
+from datetime import datetime
 from pathlib import Path
 from src.banner import cli_banner
 from src.table import table_print_stream_options
@@ -612,6 +613,8 @@ def convert_file(
 
     filter_complex_map_complete = f"{filter_complex_data_before}{filter_complex_map}{filter_complex_data_after}"
 
+    current_datetime = datetime.now()
+
     # FFmpeg command
     ffmpeg_cmd = (
             [
@@ -624,6 +627,8 @@ def convert_file(
                 str(input_file),
                 "-metadata",
                 "title=" + input_file.stem,
+                "-metadata=",
+                "encoded_at=" + current_datetime.strftime("%Y-%m-%d %H:%M:%S"),
                 "-map",
                 v_map,
                 "-map",
