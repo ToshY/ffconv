@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import subprocess as sp
 from datetime import datetime
 from pathlib import Path
@@ -62,9 +63,10 @@ def cli_args(args=None):
         "-e",
         "--extension",
         type=str,
-        required=True,
+        required=False,
         action=ExtensionCheck,
         help="Extension for the output files",
+        default={"extension": "mp4"},
     )
     parser.add_argument(
         "-vp",
@@ -237,13 +239,22 @@ def check_args(inputs, outputs, vpresets, apresets, fcpresets):
         cpath = [*el][0]
         ptype = str(*el.values())
 
+        all_files = []
         if ptype == "file":
             all_files = [Path(cpath)]
         elif ptype == "directory":
             all_files = files_in_dir(cpath)
 
-        len_all_files_in_batch = len(all_files)
+        # Replace single/double quotes in filenames for FFmpeg
+        for cf, current_file_path in enumerate(all_files):
+            # Replace single or double quotes in filename needed for FFmpeg
+            new_filename = re.sub(r"[\"']", "", current_file_path.name)
+            new_file_path = current_file_path.with_name(new_filename)
+            current_file_path.rename(new_file_path)
 
+            all_files[cf] = new_file_path
+
+        len_all_files_in_batch = len(all_files)
         if len_outputs == 1:
             output_files = [[*outputs][0]]
             output_type = str(*outputs[0].values())
@@ -409,8 +420,8 @@ def stream_user_input(ffprobe_result):
         if st["count"] == 0:
             raise Exception(
                 f"[red]No streams for type `{ty}` found. "
-                "Please make sure there's at least 1 video, 1 audio and "
-                "1 subtitle stream.[/red]"
+                f"Please make sure there's at least 1 video, 1 audio and "
+                f"1 subtitle stream.[/red]"
             )
 
         if st["count"] == 1:
@@ -429,12 +440,17 @@ def stream_user_input(ffprobe_result):
                     "language": (
                         cs["properties"]["language"]
                         if "language" in cs["properties"]
-                        else ""
+                        else "n/a"
                     ),
                     "title": (
                         cs["properties"]["track_name"]
                         if "track_name" in cs["properties"]
-                        else ""
+                        else "n/a"
+                    ),
+                    "default":         (
+                        cs["properties"]["default_track"]
+                        if "default_track" in cs["properties"]
+                        else "n/a"
                     ),
                 }
                 for cs in st["streams"]
@@ -600,18 +616,19 @@ def convert_file(
 
     # Filter complex subtitle map requires this escaped monstrosity (for Windows atleast)
     lit_file = str(input_file).replace("\\", "\\\\").replace(":", "\:")
-    filter_complex_map = "subtitles='" + lit_file + "':si=" + str(mapping["subtitles"])
+    filter_complex_map = ("subtitles='" + lit_file + "':si=" + str(mapping["subtitles"]),)
 
     # Additional filter complex; added due to possible issues when subtitles use BT.709 color space.
     filter_complex_data_before = filter_complex_preset_data.get("before", "")
     if len(filter_complex_data_before.strip()):
-        filter_complex_data_before = f"{filter_complex_data_before}"
+        filter_complex_map = (filter_complex_data_before.strip().rstrip(","), *filter_complex_map)
 
     filter_complex_data_after = filter_complex_preset_data.get("after", "")
     if len(filter_complex_data_after.strip()):
-        filter_complex_data_after = f"{filter_complex_data_after}"
+        filter_complex_map = (*filter_complex_map, filter_complex_data_after.strip().lstrip(","))
 
-    filter_complex_map_complete = f"{filter_complex_data_before}{filter_complex_map}{filter_complex_data_after}"
+    filter_complex_map_concat = ",".join(filter_complex_map)
+    filter_complex_map_complete = f"[{v_map}]{filter_complex_map_concat}"
 
     current_datetime = datetime.now()
 
@@ -629,8 +646,6 @@ def convert_file(
                 "title=" + input_file.stem,
                 "-metadata",
                 f'comment=Encoded on {current_datetime.strftime("%Y-%m-%d %H:%M:%S")}',
-                "-map",
-                v_map,
                 "-map",
                 a_map,
                 "-filter_complex",
@@ -672,6 +687,8 @@ def main(custom_args=None):
             else:
                 m = None
 
+            # Rename input filename in case it contains single or double quotes
+
             if y == 0:
                 probe_result, mapping = probe_file(fl, y, original_input[int(x)], m)
             else:
@@ -692,15 +709,27 @@ def main(custom_args=None):
     # FFmpeg
     for x, b in user_args.items():
         for z, flc in enumerate(b["input"]):
+            output = b["output"]
+            video_preset = b["video_preset"]
+            audio_preset = b["audio_preset"]
+            filter_complex = b["filter_complex_preset"]
+
+            # If input was directory use the index
+            if type(output) is list:
+                output = output[z]
+                video_preset = video_preset[z]
+                audio_preset = audio_preset[z]
+                filter_complex = filter_complex[z]
+
             # Check if first/last item for reporting
             convert_file(
                 flc,
-                b["output"][z],
+                output,
                 extension,
                 b["stream_mapping"][z],
-                b["video_preset"][z],
-                b["audio_preset"][z],
-                list_to_dict(b["filter_complex_preset"][z]),
+                video_preset,
+                audio_preset,
+                list_to_dict(filter_complex),
                 original_input[int(x)],
                 b["nr_in_batch"][z],
             )
