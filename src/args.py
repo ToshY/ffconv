@@ -82,7 +82,7 @@ class FileDirectoryCheck(argparse.Action):
                     if not p.parent.is_dir():
                         raise FileNotFoundError(
                             f"The parent directory `{str(p.parent)}` "
-                            "for output argument `{str(p)}` does not exist."
+                            f"for output argument `{str(p)}` does not exist."
                         )
                     else:
                         all_values.append({p: "file"})
@@ -139,7 +139,7 @@ class ExtensionCheck(argparse.Action):
         mime_output = mimetypes.guess_type(ext_check)[0]
         if "video" not in mime_output:
             raise ValueError(
-                f"The specificed output extension `{stripped_ext}` "
-                "is not a valid video extension."
+                f"The specified output extension `{stripped_ext}` "
+                f"is not a valid video extension."
             )
         setattr(args, self.dest, {"extension": stripped_ext})
