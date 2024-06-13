@@ -447,7 +447,7 @@ def stream_user_input(ffprobe_result):
                         if "track_name" in cs["properties"]
                         else "n/a"
                     ),
-                    "default":         (
+                    "default": (
                         cs["properties"]["default_track"]
                         if "default_track" in cs["properties"]
                         else "n/a"
