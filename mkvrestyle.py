@@ -1,25 +1,21 @@
-# -*- coding: utf-8 -*-
-
 import os
 import shutil
 import re
 import argparse
 import json
 import itertools as it
-import subprocess as sp
 import mkvrefont
 from collections import Counter
 from pathlib import Path
-from src.banner import cli_banner
-from src.table import table_print_stream_options
-from src.args import FileDirectoryCheck, files_in_dir
-from src.general import read_file, read_json, remove_empty_dict_values
-from src.logger import Logger, ProcessDisplay
-from src.fonts import FontFinder
-from src.exception import *
+from ffconv.banner import cli_banner
+from ffconv.table import table_print_stream_options
+from ffconv.args import FileDirectoryCheck, files_in_dir
+from ffconv.general import read_file, read_json, remove_empty_dict_values
+from ffconv.logger import Logger, ProcessDisplay
+from ffconv.fonts import FontFinder
+from ffconv.exception import *
 from rich import print
 from rich.prompt import IntPrompt
-from loguru import logger
 
 
 def cli_args(args=None):

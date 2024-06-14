@@ -1,20 +1,13 @@
-# -*- coding: utf-8 -*-
-
-import sys
 import argparse
-import subprocess as sp
-from pathlib import Path, PurePath
-from src.banner import cli_banner
-from src.simulate import SimulateLoading
-from src.args import files_in_dir
-from src.fonts import FontFinder
-from src.args import FileDirectoryCheck, files_in_dir
-from src.general import remove_suffix_from_string
+from pathlib import Path
+from ffconv.banner import cli_banner
+from ffconv.args import files_in_dir
+from ffconv.fonts import FontFinder
+from ffconv.args import FileDirectoryCheck
+from ffconv.general import remove_suffix_from_string
 from rich import print
-from rich.prompt import IntPrompt
 from langcodes import standardize_tag
-from src.logger import Logger, ProcessDisplay
-from loguru import logger
+from ffconv.logger import Logger, ProcessDisplay
 
 
 def cli_args(args=None):

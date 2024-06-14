@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import argparse
 import mimetypes
 from pathlib import Path
@@ -22,20 +20,14 @@ def current_working_dir():
 
 def files_in_dir(file_path, file_types=["*.mkv"]):
     """
-    Get the files in the specified directory.
+    Returns a list of files in the specified directory that match the given file types.
 
-    Parameters
-    ----------
-    file_path : str
-        Path of input directory.
-    file_types : list, optional
-        Allowed extension to look for. The default is ['*.mkv'].
+    Args:
+        file_path (str): The path to the directory.
+        file_types (List[str], optional): A list of file types to match. Defaults to ["*.mkv"].
 
-    Returns
-    -------
-    flist : list
-        List of Path objects of specified directory.
-
+    Returns:
+        List[Path]: A list of Path objects representing the files in the directory that match the given file types.
     """
 
     flist = [f for f_ in [Path(file_path).rglob(e) for e in file_types] for f in f_]

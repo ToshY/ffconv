@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
-
 import argparse
 import json
 import re
-import subprocess as sp
 from datetime import datetime
 from pathlib import Path
-from src.banner import cli_banner
-from src.table import table_print_stream_options
-from src.args import FileDirectoryCheck, ExtensionCheck, files_in_dir
-from src.general import (
+
+from ffconv.banner import cli_banner
+from ffconv.table import table_print_stream_options
+from ffconv.args import FileDirectoryCheck, ExtensionCheck, files_in_dir
+from ffconv.general import (
     read_json,
     remove_empty_dict_values,
     dict_to_list,
@@ -18,7 +16,7 @@ from src.general import (
 )
 from rich import print
 from rich.prompt import IntPrompt
-from src.logger import Logger, ProcessDisplay
+from ffconv.logger import Logger, ProcessDisplay
 from loguru import logger
 
 
@@ -737,9 +735,14 @@ def main(custom_args=None):
     return user_args.items()
 
 
-if __name__ == "__main__":
-    """ Main """
-    cli_banner(__file__)
+def cli():
+    """
+    A tool for hardcoding subtitles into videos by converting MKV to MP4.
+
+    Documentation: https://github.com/ToshY/ffconv
+    """
+
+    cli_banner('ffconv')
 
     # Stop execution at keyboard input
     try:

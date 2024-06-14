@@ -1,0 +1,81 @@
+version: '3'
+
+vars:
+  IMAGE: toshy/ffconv
+
+env:
+  UID:
+    sh: id -u
+  GID:
+    sh: id -g
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  # Docker
+  build:
+    desc: Build local images
+    vars:
+      TARGETS: [ 'dev', 'prod' ]
+    cmds:
+      - for:
+          var: TARGETS
+        cmd: docker buildx build --target {{.ITEM}} --tag {{.IMAGE}}:{{.ITEM}} .
+
+  down:
+    desc: Down service
+    cmds:
+      - docker compose down --remove-orphans
+
+  # Shell
+  shell:dev:
+    desc: Container shell
+    vars:
+      TARGET: 'dev'
+    cmds:
+      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
+      - docker compose run --rm {{.TARGET}} {{.CLI_ARGS | default "/bin/bash"}}
+
+  shell:prod:
+    desc: Container shell prod
+    vars:
+      TARGET: 'prod'
+    cmds:
+      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
+      - docker run -t --entrypoint="/bin/bash" --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
+
+  # Test
+  dev:
+    desc: Test dev image (compose)
+    vars:
+      TARGET: 'dev'
+    cmds:
+      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
+      - docker compose run -u $(id -u):$(id -g) --rm {{.TARGET}} python -m ffconv -h
+
+  prod:
+    desc: Test prod image (docker)
+    silent: true
+    vars:
+      TARGET: 'prod'
+    cmds:
+      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
+      - docker run -t -u $(id -u):$(id -g) --rm {{.IMAGE}}:{{.TARGET}} -h
+
+  # Development tools
+  ruff:
+    desc: Run ruff
+    cmds:
+      - docker compose run --rm dev ruff check .
+
+  ruff:fix:
+    desc: Run ruff fix
+    cmds:
+      - docker compose run --rm dev ruff check --fix .
+
+  mypy:
+    desc: Run mypy
+    cmds:
+      - docker compose run --rm dev mypy .

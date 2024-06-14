@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 
 class FontNotFoundError(Exception):
     """Exception raised when font is not found"""

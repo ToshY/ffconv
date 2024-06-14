@@ -1,54 +1,80 @@
-# 📺 FFconv
+<h1 align="center"> 📺 FFconv </h1>
 
-This repository contains several useful command-line scripts for hardcoding, restyling, and adding attachments to MKV
-files in a (semi)-automatic fashion.
+<div align="center">
+    <img src="https://img.shields.io/github/v/release/toshy/ffconv?label=Release&sort=semver" alt="Current bundle version" />
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codestyle.yml?branch=main&label=Ruff" alt="Ruff">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/statictyping.yml?branch=main&label=Mypy" alt="Mypy">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/security.yml?branch=main&label=Security%20check" alt="Security check" />
+    <br /><br />
+    <div>A command-line utility for hardcoding subtitles into videos by converting MKV to MP4.</div>
+</div>
 
-### FFconv
+## 📝 Quickstart
 
-Tool for hardcoding subtitles into videos; converting MKV to web compatible MP4.
+A command-line utility for hardcoding subtitles into videos by converting MKV to MP4.
 
-### MKVresort
+## 🧰 Requirements
 
-Tool for reordering streams in a user-defined fashion.
+* [🐋 Docker](https://docs.docker.com/get-docker/)
 
-### MKVrestyle
+## 🎬 Usage
 
-Tool for basic restyling of an embedded ASS file with a new user-defined font and styling.
+FFconv requires 2 volumes to be mounted: `/app/input` and `/app/output`; the other directorys (`/app/preset` and `/app/log` are optional).
 
-### MKVrefont
-
-Tool for adding attachments (subtitles, fonts) to existing MKV files.
-
-## Installation
-
-Install the required packages with `pip`:
-
-```
-pip3 install -r requirements.txt
-```
-
-## Usage
-
-### FFconv
+### 🐋 Docker
 
 ```shell
-python ffconv.py -i "./input/" -o "./output/" -e "mp4"
+docker run -it --rm \
+  -u $(id -u):$(id -g) \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
+  ghcr.io/toshy/ffconv:latest -h
 ```
 
-### MKVresort
+### 🐳 Compose
+
+Create a `compose.yaml` file.
+
+```yaml
+services:
+  ffconv:
+    image: ghcr.io/toshy/ffconv:latest
+    volumes:
+      - ./input:/input
+      - ./output:/output
+```
+
+Then run it.
 
 ```shell
-python mkvremux.py -i "input/file.mkv" -o "output" -s "preset/sort_preset.json"
+docker compose run -u $(id -u):$(id -g) --rm ffconv -h
 ```
 
-### MKVrestyle
+> [!NOTE]
+> The `/app/preset` and `/app/log` volume mounts are optional.
+
+> [!TIP]
+> You can add additional JSON presets by mounting the files to the preset directory:
+> ```shell
+> ./preset/custom.json:/app/preset/custom.json
+> ```
+
+## 🛠️ Contribute
+
+### Requirements
+
+* [☑️ Pre-commit](https://pre-commit.com/#installation).
+* [🐋 Docker Compose V2](https://docs.docker.com/compose/install/)
+* [📋 Task 3.37+](https://taskfile.dev/installation/)
+
+### Pre-commit
+
+Setting up `pre-commit` code style & quality checks for local development.
 
 ```shell
-python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.json"
+pre-commit install
 ```
 
-### MKVrefont
+## ❕ License
 
-```shell
-python mkvattach.py -i "./input/myfile.mkv" -o "./output" -f "./input/fonts"
-```
+This repository comes with a [MIT license](./LICENSE).

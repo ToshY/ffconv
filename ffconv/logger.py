@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
-
 import sys
 import subprocess as sp
 from loguru import logger
 from rich import print
-from src.exception import FFmpegError, MKVmergeError, MKVextractError, ProcessError
+from ffconv.exception import FFmpegError, MKVmergeError, MKVextractError, ProcessError
 
 
 class Logger:

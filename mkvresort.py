@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
-
 import json
 import numpy as np
 import argparse
-import subprocess as sp
 from pathlib import Path
-from src.banner import cli_banner
-from src.args import FileDirectoryCheck, files_in_dir
-from src.general import (
+from ffconv.banner import cli_banner
+from ffconv.args import FileDirectoryCheck, files_in_dir
+from ffconv.general import (
     find_in_dict,
     read_json,
     remove_empty_dict_values,
@@ -15,9 +12,8 @@ from src.general import (
     dict_to_tuple,
     split_list_of_dicts_by_key,
 )
-from src.logger import Logger, ProcessDisplay
+from ffconv.logger import Logger, ProcessDisplay
 from rich import print
-from loguru import logger
 
 
 def cli_args(args=None):
