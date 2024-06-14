@@ -42,9 +42,11 @@ tasks:
     desc: Container shell prod
     vars:
       TARGET: 'prod'
+      INPUT_DIRECTORY: '{{.i | default "input"}}'
+      OUTPUT_DIRECTORY: '{{.o | default "output"}}'
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - docker run -t --entrypoint="/bin/bash" --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
+      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output --entrypoint="/bin/bash" --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
   # Test
   dev:
@@ -60,9 +62,11 @@ tasks:
     silent: true
     vars:
       TARGET: 'prod'
+      INPUT_DIRECTORY: '{{.i | default "input"}}'
+      OUTPUT_DIRECTORY: '{{.o | default "output"}}'
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - docker run -t -u $(id -u):$(id -g) --rm {{.IMAGE}}:{{.TARGET}} -h
+      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output --rm {{.IMAGE}}:{{.TARGET}} -h
 
   # Development tools
   ruff:

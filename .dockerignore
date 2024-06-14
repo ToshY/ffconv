@@ -10,9 +10,9 @@ compose.override.yml
 compose.override.yaml
 __pycache__/
 .ruff_cache/
+.mypy_cache/
 .pre-commit-config.yaml
 Taskfile.yml
 input/
 log/
 output/
-preset/

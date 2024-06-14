@@ -6,7 +6,7 @@ LABEL maintainer="ToshY (github.com/ToshY)"
 
 ENV PIP_ROOT_USER_ACTION ignore
 
-WORKDIR /app
+WORKDIR /build
 
 RUN apt-get update \
     && apt install -y wget \
@@ -22,10 +22,6 @@ COPY requirements.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-
-RUN /bin/bash -c 'mkdir -p ./{input,output,log,preset}'
-
 FROM base as ffmpeg
 
 COPY --from=mwader/static-ffmpeg:7.0.1 /ffmpeg /usr/bin/
@@ -33,11 +29,22 @@ COPY --from=mwader/static-ffmpeg:7.0.1 /ffprobe /usr/bin/
 
 FROM ffmpeg AS prod
 
+COPY . .
+
 RUN pip install .
+
+WORKDIR /app
+
+RUN set -ex \
+    && /bin/bash -c 'mkdir -p ./{input,output,preset}' \
+    && cp -r /build/preset ./ \
+    && rm -rf /build
 
 ENTRYPOINT ["ffconv"]
 
 FROM ffmpeg AS dev
+
+WORKDIR /app
 
 COPY requirements.dev.txt ./
 
