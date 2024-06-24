@@ -1,137 +1,199 @@
-import argparse
-import mimetypes
 from pathlib import Path
-from rich.traceback import install
 
-install()
+import click
 
-
-def current_working_dir():
-    """
-    Get current working directory.
-
-    Returns
-    -------
-    Path.
-    """
-
-    return Path(__file__).cwd()
+from ffconv.helper import (
+    read_json,
+    files_in_dir,
+    replace_conflicting_characters_in_filename,
+)
 
 
-def files_in_dir(file_path, file_types=["*.mkv"]):
-    """
-    Returns a list of files in the specified directory that match the given file types.
+class InputPathChecker:
+    def __call__(self, ctx, param, value):
+        if value is None:
+            raise click.BadParameter("No path provided")
 
-    Args:
-        file_path (str): The path to the directory.
-        file_types (List[str], optional): A list of file types to match. Defaults to ["*.mkv"].
-
-    Returns:
-        List[Path]: A list of Path objects representing the files in the directory that match the given file types.
-    """
-
-    flist = [f for f_ in [Path(file_path).rglob(e) for e in file_types] for f in f_]
-
-    return flist
-
-
-class FileDirectoryCheck(argparse.Action):
-    """
-    Checks if the specified input file or directory exists.
-    If constant is set to false, directories that do not exists will be created.
-    """
-
-    def __call__(self, parser, args, values, option_string=None):
-        """
-        File/Directory argument checks
-
-        Parameters
-        ----------
-        parser
-            Argument parser.
-        args
-            Arguments.
-        values
-            Argument values.
-        option_string
-            Descriptional string. The default is None.
-
-        Raises
-        ------
-        FileNotFoundError
-            The specified File or Directory could not resolved.
-
-        Returns
-        -------
-        None.
-
-        """
-        all_values = []
-        for fl in values:
-            p = Path(fl).resolve()
-            if not self.const:
-                if p.suffix:
-                    if not p.parent.is_dir():
-                        raise FileNotFoundError(
-                            f"The parent directory `{str(p.parent)}` "
-                            f"for output argument `{str(p)}` does not exist."
-                        )
-                    else:
-                        all_values.append({p: "file"})
-                else:
-                    if not p.is_dir():
-                        p.mkdir()
-                    all_values.append({p: "directory"})
-            else:
-                if not p.exists():
-                    raise FileNotFoundError(
-                        f"The specificed path `{fl}` does not exist."
-                    )
+        results = []
+        for batch_number, path in enumerate(value):
+            current_batch = {"batch": batch_number + 1}
+            p = Path(path)
+            if p.exists():
                 if p.is_file():
-                    all_values.append({p: "file"})
+                    current_batch = {
+                        **current_batch,
+                        "input": {
+                            "given": path,
+                            "resolved": [replace_conflicting_characters_in_filename(p)],
+                        },
+                    }
+                elif p.is_dir():
+                    files = files_in_dir(p)
+                    amount_of_files_in_directory = len(files)
+                    if amount_of_files_in_directory == 0:
+                        raise click.BadParameter("No files found in directory")
+
+                    for current_file_index, current_file_path in enumerate(files):
+                        files[current_file_index] = (
+                            replace_conflicting_characters_in_filename(
+                                current_file_path
+                            )
+                        )
+
+                    current_batch = {
+                        **current_batch,
+                        "input": {"given": path, "resolved": files},
+                    }
                 else:
-                    all_values.append({p: "directory"})
+                    raise click.BadParameter("Not a file or directory")
+            else:
+                raise click.BadParameter("Path does not exist")
+            results.append(current_batch)
 
-        setattr(args, self.dest, all_values)
+        return results
 
 
-class ExtensionCheck(argparse.Action):
-    """
-    Checks if the specified extension is valid through mimetype guessing.
-    """
+class OutputPathChecker:
+    def __call__(self, ctx, param, value):
+        if value is None:
+            raise click.BadParameter("No path provided")
 
-    def __call__(self, parser, args, values, option_string=None):
-        """
-        File extension argument checks
+        amount_of_current_param_values = len(value)
+        amount_of_input_values = len(ctx.params.get("input_path"))
 
-        Parameters
-        ----------
-        parser
-            Argument parser.
-        args
-            Arguments.
-        values
-            Argument values.
-        option_string
-            Descriptional string. The default is None.
-
-        Raises
-        ------
-        ValueError
-            The specified output extension is not a valid extension for video files.
-
-        Returns
-        -------
-        None.
-
-        """
-        mimetypes.init()
-        stripped_ext = values.lstrip(".")
-        ext_check = "placeholder." + stripped_ext
-        mime_output = mimetypes.guess_type(ext_check)[0]
-        if "video" not in mime_output:
-            raise ValueError(
-                f"The specified output extension `{stripped_ext}` "
-                f"is not a valid video extension."
+        if amount_of_input_values != amount_of_current_param_values:
+            raise click.BadParameter(
+                f"The amount of input values ({amount_of_input_values}) does not "
+                f"equal amount of output values ({amount_of_current_param_values})."
             )
-        setattr(args, self.dest, {"extension": stripped_ext})
+
+        results = []
+        for batch_number, path in enumerate(value):
+            current_batch = {"batch": batch_number + 1}
+            p = Path(path)
+            if p.suffix:
+                if not p.parent.is_dir():
+                    raise FileNotFoundError(
+                        f"The parent directory `{str(p.parent)}` "
+                        f"for output argument `{str(p)}` does not exist."
+                    )
+                else:
+                    current_batch = {
+                        **current_batch,
+                        "output": {"given": path, "resolved": p},
+                    }
+            else:
+                if not p.is_dir():
+                    p.mkdir()
+                current_batch = {
+                    **current_batch,
+                    "output": {"given": path, "resolved": p},
+                }
+            results.append(current_batch)
+
+        return results
+
+
+class PresetPathChecker:
+    def __call__(self, ctx, param, value: tuple):
+        amount_of_current_param_values = len(value)
+        amount_of_input_values = len(ctx.params.get("input_path"))
+
+        # Either give 1 value or same exact amount as input values.
+        if (
+            amount_of_input_values != amount_of_current_param_values
+            and amount_of_current_param_values != 1
+        ):
+            raise click.BadParameter(
+                f"The amount of input values ({amount_of_input_values}) does not "
+                f"equal amount of preset values ({amount_of_current_param_values})."
+            )
+
+        to_be_enumerated = value
+        if amount_of_input_values != amount_of_current_param_values:
+            to_be_enumerated = value * amount_of_input_values
+
+        results = []
+        for batch_number, path in enumerate(to_be_enumerated):
+            current_batch: dict = {"batch": batch_number + 1}
+            if path is None:
+                current_batch = {**current_batch, param.name: None}
+            elif Path(path).exists():
+                p = Path(path)
+                if p.is_file():
+                    current_batch = {**current_batch, param.name: read_json(p)}
+                else:
+                    raise click.BadParameter("Not a file")
+            else:
+                raise click.BadParameter("Path does not exist")
+            results.append(current_batch)
+
+        return results
+
+
+class PresetOptionalChecker:
+    def __call__(self, ctx, param, value: tuple):
+        amount_of_current_param_values = len(value)
+        amount_of_input_values = len(ctx.params.get("input_path"))
+
+        # Either give 1 value or same exact amount as input values.
+        if (
+            amount_of_input_values != amount_of_current_param_values
+            and amount_of_current_param_values != 1
+        ):
+            raise click.BadParameter(
+                f"The amount of input values ({amount_of_input_values}) does not "
+                f"equal amount of preset values ({amount_of_current_param_values})."
+            )
+
+        to_be_enumerated = value
+        if amount_of_input_values != amount_of_current_param_values:
+            to_be_enumerated = value * amount_of_input_values
+
+        results = []
+        for batch_number, path in enumerate(to_be_enumerated):
+            current_batch: dict = {"batch": batch_number + 1}
+            if path is None:
+                current_batch = {**current_batch, param.name: None}
+            elif Path(path).exists():
+                p = Path(path)
+                if p.is_file():
+                    current_batch = {**current_batch, param.name: read_json(p)}
+                else:
+                    raise click.BadParameter("Not a file")
+            else:
+                raise click.BadParameter("Path does not exist")
+            results.append(current_batch)
+
+        return results
+
+
+class OptionalValueChecker:
+    def __call__(self, ctx, param, value: tuple):
+        if value is None:
+            raise click.BadParameter("No path provided")
+
+        amount_of_current_param_values = len(value)
+        amount_of_input_values = len(ctx.params.get("input_path"))
+
+        # Either give 1 value or same exact amount as input values.
+        if (
+            amount_of_input_values != amount_of_current_param_values
+            and amount_of_current_param_values != 1
+        ):
+            raise click.BadParameter(
+                f"The amount of input values ({amount_of_input_values}) does not "
+                f"equal amount of optional values ({amount_of_current_param_values})."
+            )
+
+        to_be_enumerated = value
+        if amount_of_input_values != amount_of_current_param_values:
+            to_be_enumerated = value * amount_of_input_values
+
+        results = []
+        for batch_number, val in enumerate(to_be_enumerated):
+            current_batch: dict = {"batch": batch_number + 1, param.name: val}
+
+            results.append(current_batch)
+
+        return results

@@ -1,4 +1,4 @@
-name: Codestyle with Black
+name: Codequality with Ruff
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
       - master
 
 jobs:
-  black:
-    name: Run codestyle checks
+  ruff:
+    name: Run codequality checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,5 +26,5 @@ jobs:
       - name: Install requirements
         run: pip install -r requirements.txt -r requirements.dev.txt
 
-      - name: Black check
-        run: black . --check
+      - name: Ruff check
+        run: ruff check .

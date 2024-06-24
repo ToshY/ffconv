@@ -36,7 +36,7 @@ RUN pip install .
 WORKDIR /app
 
 RUN set -ex \
-    && /bin/bash -c 'mkdir -p ./{input,output,preset}' \
+    && /bin/bash -c 'mkdir -p ./{input,output,preset}' /usr/local/share/fonts \
     && cp -r /build/preset ./ \
     && rm -rf /build
 

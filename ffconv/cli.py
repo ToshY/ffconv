@@ -1,434 +1,120 @@
-import argparse
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 
-from ffconv.banner import cli_banner
-from ffconv.table import table_print_stream_options
-from ffconv.args import FileDirectoryCheck, ExtensionCheck, files_in_dir
-from ffconv.general import (
-    read_json,
+import click
+from rich.prompt import IntPrompt
+
+from ffconv.args import (
+    InputPathChecker,
+    OutputPathChecker,
+    PresetPathChecker,
+    OptionalValueChecker,
+    PresetOptionalChecker,
+)
+from ffconv.exception import StreamOrderError, StreamTypeMissingError
+from ffconv.helper import (
+    split_list_of_dicts_by_key,
+    combine_arguments_by_batch,
     remove_empty_dict_values,
     dict_to_list,
-    list_to_dict,
-    split_list_of_dicts_by_key,
 )
-from rich import print
-from rich.prompt import IntPrompt
-from ffconv.logger import Logger, ProcessDisplay
-from loguru import logger
+from ffconv.process import ProcessCommand
+from ffconv.table import table_print_stream_options
+from loguru import logger  # noqa
 
 
-def cli_args(args=None):
+def validate_stream_order(ffprobe_result):
     """
-    Command Line argument parser.
+    Check the order of streams in the given ffprobe result.
 
-    Returns
-    -------
-    str
-        The path of the input file/directory.
-    str
-        The path of the output directory.
-    tuple
-        The tuple to sort on key for each track in the accompanied stream.
+    Parameters:
+        ffprobe_result (dict): A dictionary containing the ffprobe result.
+            The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+            are dictionaries with the following keys:
+            - 'count' (int): The number of streams of that type.
+            - 'streams' (list): A list of dictionaries, each representing a stream.
+                Each stream dictionary has the following keys:
+                - 'id' (int): The ID of the stream.
+                - 'properties' (dict): A dictionary containing additional properties of the stream.
 
-    """
+    Raises:
+        StreamOrderError: If the stream orders are not standardized.
 
-    # Arguments
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "-i",
-        "--input",
-        type=str,
-        required=True,
-        action=FileDirectoryCheck,
-        const=True,
-        nargs="+",
-        help="Path to input file or directory",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        required=True,
-        action=FileDirectoryCheck,
-        const=False,
-        nargs="+",
-        help="Path to output directory",
-    )
-    parser.add_argument(
-        "-e",
-        "--extension",
-        type=str,
-        required=False,
-        action=ExtensionCheck,
-        help="Extension for the output files",
-        default={"extension": "mp4"},
-    )
-    parser.add_argument(
-        "-vp",
-        "--video_preset",
-        type=str,
-        required=False,
-        action=FileDirectoryCheck,
-        nargs="+",
-        help="Path to JSON file with FFmpeg video preset options",
-    )
-    parser.add_argument(
-        "-ap",
-        "--audio_preset",
-        type=str,
-        required=False,
-        action=FileDirectoryCheck,
-        nargs="+",
-        help="Path to JSON file with FFmpeg audio preset options",
-    )
-    parser.add_argument(
-        "-fc",
-        "--filter_complex",
-        type=str,
-        required=False,
-        action=FileDirectoryCheck,
-        nargs="+",
-        help="Path to JSON file with FFmpeg preset options for additional filter complex",
-    )
-    parser.add_argument(
-        "-v", "--verbose", action="count", default=0, help="Verbose logging",
-    )
-
-    if args is not None:
-        args = parser.parse_args(args)
-    else:
-        args = parser.parse_args()
-
-    # Check args
-    user_args = check_args(
-        args.input,
-        args.output,
-        args.video_preset,
-        args.audio_preset,
-        args.filter_complex
-    )
-
-    return user_args, args.input, args.extension, args.verbose
-
-
-def check_args(inputs, outputs, vpresets, apresets, fcpresets):
-    """
-    Check the amount of input arguments, outputs and presets.
-
-    Parameters
-    ----------
-    inputs : list
-        Input argument(s).
-    outputs : list
-        Output argument(s).
-    vpresets : list
-        Video preset argument(s).
-    apresets : list
-        Audio preset argument(s).
-
-    Raises
-    ------
-    Exception
-        Input arguments not equals the amount of other arguments (and is not equal to 1).
-
-    Returns
-    -------
-    None.
-
+    Returns:
+        None
     """
 
-    len_inputs = len(inputs)
-    len_outputs = len(outputs)
-
-    if len_inputs != len_outputs:
-        if len_outputs != 1:
-            raise Exception(
-                f"Amount of input arguments ({len_inputs}) "
-                f"does not equal the amount of output arguments ({len_outputs})."
-            )
-
-    if vpresets is not None:
-        len_vpresets = len(vpresets)
-        if len_vpresets != 1:
-            if len_inputs != len_vpresets:
-                raise Exception(
-                    f"Amount of input arguments ({len_inputs}) "
-                    f"does not equal the amount of video preset arguments ({len_vpresets})."
-                )
-
-            vdata = []
-            for vp in vpresets:
-                vdata.append(
-                    dict_to_list(
-                        remove_empty_dict_values(read_json(list(vp.keys())[0]))
-                    )
-                )
-
-        else:
-            vdata = dict_to_list(remove_empty_dict_values(read_json(*vpresets[0])))
-    else:
-        len_vpresets = 0
-        vdata = [
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-crf",
-            "18",
-            "-preset",
-            "slow",
-            "-profile:v",
-            "high",
-            "-level:v",
-            "4.0",
-        ]
-
-    if apresets is not None:
-        len_apresets = len(apresets)
-        if len_apresets != 1:
-            if len_inputs != len_apresets:
-                raise Exception(
-                    f"Amount of input arguments ({len_inputs}) "
-                    f"does not equal the amount of audio preset arguments ({len_apresets})."
-                )
-
-            adata = []
-            for ap in apresets:
-                adata.append(
-                    dict_to_list(
-                        remove_empty_dict_values(read_json(list(ap.keys())[0]))
-                    )
-                )
-        else:
-            adata = dict_to_list(remove_empty_dict_values(read_json(*apresets[0])))
-    else:
-        len_apresets = 0
-        adata = ["-c:a", "aac", "-strict", "2", "-ab", "192k", "-ac", "2"]
-
-    if fcpresets is not None:
-        len_fcpresets = len(fcpresets)
-        if len_fcpresets != 1:
-            if len_inputs != len_fcpresets:
-                raise Exception(
-                    f"Amount of input arguments ({len_inputs}) "
-                    f"does not equal the amount of filter complex preset arguments ({len_fcpresets})."
-                )
-
-            fcdata = []
-            for ap in fcpresets:
-                fcdata.append(
-                    dict_to_list(
-                        remove_empty_dict_values(read_json(list(ap.keys())[0]))
-                    )
-                )
-        else:
-            fcdata = dict_to_list(remove_empty_dict_values(read_json(*fcpresets[0])))
-    else:
-        len_fcpresets = 0
-        fcdata = ["before", "", "after", ""]
-
-    # Prepare inputs/outputs/presets
-    batch = {}
-    for i, el in enumerate(inputs):
-
-        cpath = [*el][0]
-        ptype = str(*el.values())
-
-        all_files = []
-        if ptype == "file":
-            all_files = [Path(cpath)]
-        elif ptype == "directory":
-            all_files = files_in_dir(cpath)
-
-        # Replace single/double quotes in filenames for FFmpeg
-        for cf, current_file_path in enumerate(all_files):
-            # Replace single or double quotes in filename needed for FFmpeg
-            new_filename = re.sub(r"[\"']", "", current_file_path.name)
-            new_file_path = current_file_path.with_name(new_filename)
-            current_file_path.rename(new_file_path)
-
-            all_files[cf] = new_file_path
-
-        len_all_files_in_batch = len(all_files)
-        if len_outputs == 1:
-            output_files = [[*outputs][0]]
-            output_type = str(*outputs[0].values())
-            if ptype == "directory":
-                if len_all_files_in_batch > len_outputs and output_type == "file":
-                    raise Exception(
-                        f"The path `{cpath.as_posix()}` contains"
-                        f" `{len_all_files_in_batch}` files but only"
-                        f" `{len_outputs}`"
-                        f" output filename(s) was/were specified."
-                    )
-                else:
-                    output_files = [outputs[0] for _ in range(len(all_files))]
-        else:
-            output_files = outputs[0]
-            # Unset
-            outputs.pop(0)
-            # Check type
-            if ptype == "directory":
-                # Create copies
-                output_files = [output_files for _ in range(len(all_files))]
-
-        if len_vpresets == 1:
-            video_data = vdata
-            if ptype == "directory":
-                video_data = [video_data for _ in range(len(all_files))]
-        else:
-            if len_vpresets == 0:
-                video_data = vdata
-                video_data = [video_data for _ in range(len(all_files))]
-            else:
-                video_data = vdata[0]
-                vdata.pop(0)
-                if ptype == "directory":
-                    video_data = [video_data for _ in range(len(all_files))]
-
-        if len_apresets == 1:
-            audio_data = adata
-            if ptype == "directory":
-                audio_data = [audio_data for _ in range(len(all_files))]
-        else:
-            if len_apresets == 0:
-                audio_data = adata
-                audio_data = [audio_data for _ in range(len(all_files))]
-            else:
-                audio_data = adata[0]
-                adata.pop(0)
-                if ptype == "directory":
-                    audio_data = [audio_data for _ in range(len(all_files))]
-
-        if len_fcpresets == 1:
-            filter_complex_data = fcdata
-            if ptype == "directory":
-                filter_complex_data = [filter_complex_data for _ in range(len(all_files))]
-        else:
-            if len_fcpresets == 0:
-                filter_complex_data = fcdata
-                filter_complex_data = [filter_complex_data for _ in range(len(all_files))]
-            else:
-                filter_complex_data = fcdata[0]
-                fcdata.pop(0)
-                if ptype == "directory":
-                    filter_complex_data = [filter_complex_data for _ in range(len(all_files))]
-
-        batch[str(i)] = {
-            "input": all_files,
-            "output": output_files,
-            "video_preset": video_data,
-            "audio_preset": audio_data,
-            "filter_complex_preset": filter_complex_data
-        }
-
-    return batch
-
-
-def check_streams_order(ffprobe_result):
-    """
-    Check if stream types are ordered properly.
-
-    Parameters
-    ----------
-    probe_result : dict
-        FFprobe results.
-
-    Raises
-    ------
-    Exception
-        Exception for stream order inconsistencies.
-
-    Returns
-    -------
-    None.
-
-    """
-    # Total streams
-    tcount = list(range(0, sum([st["count"] for ix, st in ffprobe_result.items()])))
+    total_streams = list(
+        range(0, sum([st["count"] for ix, st in ffprobe_result.items()]))
+    )
 
     # Check count and properly formatted file
-    for ty, st in ffprobe_result.items():
-        sc = st["count"]
-        if tcount[:sc] != [cs["id"] for cs in st["streams"]]:
-            raise Exception(
-                "The stream orders are not standardized. "
-                "Please run `mkvremux.py` to sort the streams "
-                "automatically with appropriate ordering."
-            )
+    for stream_type, stream_info in ffprobe_result.items():
+        stream_count = stream_info["count"]
+        if total_streams[:stream_count] != [
+            current_stream["id"] for current_stream in stream_info["streams"]
+        ]:
+            raise StreamOrderError()
 
-        del tcount[:sc]
+        del total_streams[:stream_count]
 
 
-def check_streams_count(ffprobe_result):
+def validate_stream_count(ffprobe_result):
     """
-    Check the stream type count.
+    Check the stream count in the given ffprobe result.
 
-    Parameters
-    ----------
-    probe_result : list
-        List of dicts of video, audio and subtitle streams.
+    Parameters:
+        ffprobe_result (dict): A dictionary containing the ffprobe result.
+            The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+            are dictionaries with the following keys:
+            - 'count' (int): The number of streams of that type.
 
-    Raises
-    ------
-    Exception
-        Raises exception when the file does not contain necessary video, audio and subtitle tracks.
+    Raises:
+        StreamTypeMissingError: If any stream count is less than 1.
 
-    Returns
-    -------
-    None.
-
+    Returns:
+        None
     """
-    for t, st in ffprobe_result.items():
-        if st["count"] < 1:
-            raise Exception(
-                f"[red]The file did not contain necessary stream type `{t}`. "
-                f"File needs at least 1 video (`v`), 1 audio (`a`) "
-                f"and 1 subtitle (`s`) stream.[/red]"
-            )
+
+    for stream_type, stream_info in ffprobe_result.items():
+        if stream_info["count"] < 1:
+            raise StreamTypeMissingError(stream_type)
 
 
 def stream_user_input(ffprobe_result):
     """
-    Get stream mapping and possible user input in case of multiple streams for specific type.
+    Get stream ID from user input.
 
-    Parameters
-    ----------
-    probe_result : list
-        List of dicts of video, audio and subtitle streams.
+    Parameters:
+        ffprobe_result (dict): A dictionary containing the ffprobe result.
+            The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+            are dictionaries with the following keys:
+            - 'count' (int): The number of streams of that type.
+            - 'streams' (list): A list of dictionaries, each representing a stream.
+                Each stream dictionary has the following keys:
+                - 'id' (int): The ID of the stream.
+                - 'properties' (dict): A dictionary containing additional properties of the stream.
 
-    Raises
-    ------
-    Exception
-        Raises exception if stream count is 0.
+    Raises:
+        StreamTypeMissingError: If any stream count is less than 1.
 
-    Returns
-    -------
-    stream_map : dict
-        A key-value pair of stream type and mapping id.
-
+    Returns:
+        None
     """
 
     stream_map = {}
     stream_sum_count = 0
-    for ty, st in ffprobe_result.items():
-        if st["count"] == 0:
-            raise Exception(
-                f"[red]No streams for type `{ty}` found. "
-                f"Please make sure there's at least 1 video, 1 audio and "
-                f"1 subtitle stream.[/red]"
-            )
-
-        if st["count"] == 1:
-            stream_map[ty] = st["streams"][0]["id"]
+    for stream_type, stream_info in ffprobe_result.items():
+        if stream_info["count"] == 0:
+            raise StreamTypeMissingError(stream_type)
+        if stream_info["count"] == 1:
+            stream_map[stream_type] = stream_info["streams"][0]["id"]
         else:
-            print(f"\r\n> Multiple [cyan]{ty}[/cyan] streams detected")
+            logger.info(f"Multiple `{stream_type}` streams detected")
 
             # Default
-            selected_stream = st["streams"][0]["id"]
+            selected_stream = stream_info["streams"][0]["id"]
 
             # Stream properties
             stream_properties = [
@@ -451,7 +137,7 @@ def stream_user_input(ffprobe_result):
                         else "n/a"
                     ),
                 }
-                for cs in st["streams"]
+                for cs in stream_info["streams"]
             ]
 
             table_print_stream_options(stream_properties)
@@ -459,54 +145,56 @@ def stream_user_input(ffprobe_result):
 
             # Request user input
             selected_stream = IntPrompt.ask(
-                f"\r\n# Please specify the {ty} id to use: ",
+                f"# Please specify the {stream_type} id to use: ",
                 choices=allowed,
                 default=selected_stream,
                 show_choices=True,
                 show_default=True,
             )
-            print(f"\r> Stream index [green]`{selected_stream}`[/green] selected!")
-
-            stream_map[ty] = selected_stream
+            logger.info(f"Selected stream index: {selected_stream}")
+            stream_map[stream_type] = selected_stream
 
         # Remap subtitle due to filter complex
-        if ty != "subtitles":
-            stream_sum_count = stream_sum_count + st["count"]
+        if stream_type != "subtitles":
+            stream_sum_count = stream_sum_count + stream_info["count"]
         else:
-            stream_map[ty] = int(stream_map[ty]) - stream_sum_count
+            stream_map[stream_type] = int(stream_map[stream_type]) - stream_sum_count
 
     return stream_map
 
 
-def probe_file(input_file, idx, original_batch, mark):
+def mkvmerge_identify_streams(
+    input_file, total_items, item_index, batch_index, batch_name
+):
     """
-    MKVidentify to get video/audio/subtitle streams.
+    Identify and parse the streams in an MKV file.
 
-    Parameters
-    ----------
-    input_file : Path
-        The specified input file as Path object.
+    Parameters:
+        input_file (Path): The path to the input MKV file.
+        total_items (int): The total number of items in the batch.
+        item_index (int): The index of the current item.
+        batch_index (int): The index of the batch.
+        batch_name (str): The name of the batch.
 
-    Raises
-    ------
-    Exception
-        Raised if exit code from FFprobe is not 0.
-
-    Returns
-    -------
-    probe_output : dict
-        Dictionary with tracks of the video/audio/subtitle streams.
-
+    Returns:
+        tuple: A tuple containing the parsed streams and the mapping.
+            - streams (dict): A dictionary containing the parsed streams.
+                The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+                are dictionaries with the following keys:
+                - 'count' (int): The number of streams of that type.
+                - 'streams' (list): A list of dictionaries, each representing a stream.
+                    Each stream dictionary has the following keys:
+                    - 'id' (int): The ID of the stream.
+                    - 'properties' (dict): A dictionary containing additional properties of the stream.
+            - mapping (dict or None): The mapping for stream conversion, if applicable.
     """
 
-    original_batch_name = str([*original_batch][0])
+    if item_index == 0:
+        logger.info(
+            f"MKVmerge identify batch `{batch_index}` for `{batch_name}` started."
+        )
 
-    if mark == 0:
-        print(f"\r\n\r\n> MKVidentify batch for [cyan]`{original_batch_name}`[/cyan]")
-
-    print(f"\r\n> Starting MKVidentify for [cyan]`{input_file.name}`[/cyan]")
-
-    mkvidentify_cmd = [
+    mkvmerge_identify_command = [
         "mkvmerge",
         "--identify",
         "--identification-format",
@@ -514,21 +202,14 @@ def probe_file(input_file, idx, original_batch, mark):
         str(input_file),
     ]
 
-    process = ProcessDisplay(logger)
-    result = process.run("MKVmerge identify", mkvidentify_cmd)
+    process = ProcessCommand(logger)
+    result = process.run("MKVmerge identify", mkvmerge_identify_command)
 
-    # Json output
-    mkvidentify_out = json.loads(result.stdout)
-    if mkvidentify_out["errors"]:
-        raise Exception(
-            'MKVidentify encountered the following error: "{}"'.format(
-                mkvidentify_out["errors"][0]
-            )
-        )
+    mkvmerge_identify_output = json.loads(result.stdout)
 
     # Split by codec_type
     split_streams, split_keys = split_list_of_dicts_by_key(
-        mkvidentify_out["tracks"], "type"
+        mkvmerge_identify_output["tracks"], "type"
     )
 
     # Rebuild streams & count per codec type
@@ -537,216 +218,269 @@ def probe_file(input_file, idx, original_batch, mark):
         streams[s]["streams"] = split_streams[x]
         streams[s]["count"] = len(streams[s]["streams"])
 
-    # Check if file has consistent streams
-    check_streams_order(streams)
+    validate_stream_count(streams)
+    validate_stream_order(streams)
 
-    mapping = None
     # Check if first file from batch for mapping in conversion later
-    if idx == 0:
+    mapping = None
+    if item_index == 0:
         mapping = stream_user_input(streams)
 
-    print("> MKVidentify [green]completed[/green]!")
-
-    if mark == 1:
-        print(
-            f"\r\n> MKVidentify batch completed for [cyan]`{original_batch_name}`[/cyan]\r\n"
+    if item_index == total_items - 1:
+        logger.info(
+            f"MKVmerge identify batch `{batch_index}` for `{batch_name}` completed."
         )
 
     return streams, mapping
 
 
-def convert_file(
-        input_file,
-        output_dir,
-        output_ext,
-        mapping,
-        video_preset_data,
-        audio_preset_data,
-        filter_complex_preset_data,
-        original_batch,
-        mark,
+def ffmpeg_convert_file(
+    input_file: Path,
+    output_path: Path,
+    output_extension: str,
+    stream_mapping: dict,
+    video_preset: dict,
+    audio_preset: dict,
+    filter_preset: dict | None,
+    total_items: int,
+    item_index: int,
+    batch_index: int,
+    batch_name: str,
 ):
     """
-    FFmpeg file conversion with specified preset options
+    Convert an input file to an output file using FFmpeg.
 
-    Parameters
-    ----------
-    input_file : Path
-        The specified input file as Path object.
-
-    Raises
-    ------
-    Exception
-        Raised if exit code from FFprobe is not 0.
-
-    Returns
-    -------
-    probe_output : dict
-        Dictionary with tracks of the video/audio/subtitle streams.
-
+    Parameters:
+        input_file (Path): The path to the input file.
+        output_path (Path): The path to the output directory or file.
+        output_extension (str): The extension of the output file.
+        stream_mapping (dict): The mapping for stream conversion.
+        video_preset (dict): The video preset.
+        audio_preset (dict): The audio preset.
+        filter_preset (dict): The filter preset.
+        total_items (int): The total number of items in the batch.
+        item_index (int): The index of the current item.
+        batch_index (int): The index of the batch.
+        batch_name (str): The name of the batch.
     """
 
-    original_batch_name = str([*original_batch][0])
+    # Converting presets to lists and clearing empty values
+    video_preset_list = dict_to_list(remove_empty_dict_values(video_preset))
+    audio_preset_list = dict_to_list(remove_empty_dict_values(audio_preset))
 
-    if mark == 0:
-        print(f"\r\n\r\n> FFmpeg batch for [cyan]`{original_batch_name}`[/cyan]")
+    if item_index == 0:
+        logger.info(f"FFmpeg batch `{batch_index}` for `{batch_name}` started.")
 
-    # Preset data
-    v_data = video_preset_data
-    a_data = audio_preset_data
-
-    # Output split
-    output_path = list(output_dir.keys())[0]
-    output_type = list(output_dir.values())[0]
-
-    # Output extension
-    output_ext_formatted = "." + output_ext["extension"].lstrip(".")
-
-    # Prepare output file name
-    if output_type == "directory":
-        output_file = str(output_path.joinpath(input_file.stem + output_ext_formatted))
+    output_extension_with_leading_dot = "." + output_extension.lstrip(".")
+    if output_path.is_dir():
+        output_file = output_path.joinpath(
+            input_file.stem + output_extension_with_leading_dot
+        )
     else:
-        output_file = str(output_path.with_suffix("").with_suffix(output_ext_formatted))
+        output_file = Path(
+            f"{output_path.with_suffix('')}{output_extension_with_leading_dot}"
+        )
 
     # Prepare mapping data
-    v_map = "0:" + str(mapping["video"])
-    a_map = "0:" + str(mapping["audio"])
+    video_map_index = "0:" + str(stream_mapping["video"])
+    audio_map_index = "0:" + str(stream_mapping["audio"])
 
-    # Filter complex subtitle map requires this escaped monstrosity (for Windows atleast)
+    # Filter complex subtitle map requires this escaped monstrosity for Windows
     lit_file = str(input_file).replace("\\", "\\\\").replace(":", "\:")
-    filter_complex_map = ("subtitles='" + lit_file + "':si=" + str(mapping["subtitles"]),)
-
-    # Additional filter complex; added due to possible issues when subtitles use BT.709 color space.
-    filter_complex_data_before = filter_complex_preset_data.get("before", "")
-    if len(filter_complex_data_before.strip()):
-        filter_complex_map = (filter_complex_data_before.strip().rstrip(","), *filter_complex_map)
-
-    filter_complex_data_after = filter_complex_preset_data.get("after", "")
-    if len(filter_complex_data_after.strip()):
-        filter_complex_map = (*filter_complex_map, filter_complex_data_after.strip().lstrip(","))
-
-    filter_complex_map_concat = ",".join(filter_complex_map)
-    filter_complex_map_complete = f"[{v_map}]{filter_complex_map_concat}"
-
-    current_datetime = datetime.now()
-
-    # FFmpeg command
-    ffmpeg_cmd = (
-            [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-i",
-                str(input_file),
-                "-metadata",
-                "title=" + input_file.stem,
-                "-metadata",
-                f'comment=Encoded on {current_datetime.strftime("%Y-%m-%d %H:%M:%S")}',
-                "-map",
-                a_map,
-                "-filter_complex",
-                filter_complex_map_complete,
-            ]
-            + v_data
-            + a_data
-            + ["-movflags", "faststart", output_file]
+    filter_complex_map = (
+        "subtitles='" + lit_file + "':si=" + str(stream_mapping["subtitles"]),
     )
 
-    process = ProcessDisplay(logger)
-    result = process.run("FFmpeg convert", ffmpeg_cmd)
+    # Additional filter complex options; added due to possible issues with subtitles using BT.709 color space
+    if filter_preset is not None:
+        filter_complex_data_before = filter_preset.get("before", "")
+        if len(filter_complex_data_before.strip()):
+            filter_complex_map = (  # type: ignore[assignment]
+                filter_complex_data_before.strip().rstrip(","),
+                *filter_complex_map,
+            )
 
-    if mark == 1:
-        print(f"\r\n> FFmpeg batch complete for [cyan]`{original_batch_name}`[/cyan]")
+        filter_complex_data_after = filter_preset.get("after", "")
+        if len(filter_complex_data_after.strip()):
+            filter_complex_map = (  # type: ignore[assignment]
+                *filter_complex_map,
+                filter_complex_data_after.strip().lstrip(","),
+            )
 
-    return None
+    filter_complex_map_concat = ",".join(filter_complex_map)
+    filter_complex_map_complete = f"[{video_map_index}]{filter_complex_map_concat}"
+
+    current_datetime = datetime.now()
+    metadata_encoded_date = (
+        f'comment=Encoded on {current_datetime.strftime("%Y-%m-%d %H:%M:%S")}'
+    )
+
+    ffmpeg_convert_command = (
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(input_file),
+            "-metadata",
+            "title=" + input_file.stem,
+            "-metadata",
+            metadata_encoded_date,
+            "-map",
+            audio_map_index,
+            "-filter_complex",
+            filter_complex_map_complete,
+        ]
+        + video_preset_list
+        + audio_preset_list
+        + ["-movflags", "faststart", str(output_file)]
+    )
+
+    process = ProcessCommand(logger)
+    process.run("FFmpeg convert", ffmpeg_convert_command)
+
+    if item_index != total_items - 1:
+        return
+
+    logger.info(f"FFmpeg batch `{batch_index}` for `{batch_name}` completed.")
 
 
 @logger.catch
-def main(custom_args=None):
-    # Input arguments
-    user_args, original_input, extension, verbose = cli_args(custom_args)
+@click.command(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="Repository: https://github.com/ToshY/ffconv",
+)
+@click.option(
+    "--input-path",
+    "-i",
+    type=click.Path(exists=True, dir_okay=True, file_okay=True, resolve_path=True),
+    required=True,
+    multiple=True,
+    callback=InputPathChecker(),
+    help="Path to input file or directory",
+)
+@click.option(
+    "--output-path",
+    "-o",
+    type=click.Path(dir_okay=True, file_okay=True, resolve_path=True),
+    required=True,
+    multiple=True,
+    callback=OutputPathChecker(),
+    help="Path to output file or directory",
+)
+@click.option(
+    "--video-preset",
+    "-vp",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, resolve_path=True),
+    required=False,
+    multiple=True,
+    callback=PresetPathChecker(),
+    show_default=True,
+    default=["./preset/video.json"],
+    help="Path to JSON file with video preset options",
+)
+@click.option(
+    "--audio-preset",
+    "-ap",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, resolve_path=True),
+    required=False,
+    multiple=True,
+    callback=PresetPathChecker(),
+    show_default=True,
+    default=["./preset/audio.json"],
+    help="Path to JSON file with audio preset options",
+)
+@click.option(
+    "--filter-preset",
+    "-fc",
+    type=click.Path(exists=True, dir_okay=False, file_okay=True, resolve_path=True),
+    required=False,
+    multiple=True,
+    callback=PresetOptionalChecker(),
+    show_default=True,
+    default=[None],
+    help="Path to JSON file with filter complex preset options",
+)
+@click.option(
+    "--extension",
+    "-ext",
+    type=click.Choice(["mp4", "webm", "avi"]),
+    required=False,
+    multiple=True,
+    callback=OptionalValueChecker(),
+    show_default=True,
+    default=["mp4"],
+    help="Output file extension",
+)
+@click.option(
+    "--auto",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Automatically decides video, audio and filter presets to use based on input file characteristics",
+)
+def cli(
+    input_path, output_path, video_preset, audio_preset, filter_preset, extension, auto
+):
+    # auto_decide_presets = auto
+    combined_result = combine_arguments_by_batch(
+        input_path, output_path, video_preset, audio_preset, filter_preset, extension
+    )
 
-    # Logger
-    global logger
-    logger = Logger(Path(__file__).stem, verbose).logger
+    # Identify streams
+    for item in combined_result:
+        current_batch = item.get("batch")
+        current_input_original_batch_name = item.get("input").get("given")
+        current_input_files = item.get("input").get("resolved")
+        total_current_input_files = len(current_input_files)
 
-    # FFprobe
-    for x, b in user_args.items():
-        bn = []
-        mp = []
-        for y, fl in enumerate(b["input"]):
-            # Check if first/last item for reporting
-            if fl == b["input"][0]:
-                m = 0
-            elif fl == b["input"][-1]:
-                m = 1
-            else:
-                m = None
-
-            # Rename input filename in case it contains single or double quotes
-
-            if y == 0:
-                probe_result, mapping = probe_file(fl, y, original_input[int(x)], m)
-            else:
-                probe_result, _ = probe_file(fl, y, original_input[int(x)], m)
-
-            # Check if probe contains at least 1 v/a/s stream
-            check_streams_count(probe_result)
-
-            # Append mapping
-            mp.append(mapping)
-
-            # First in batch
-            bn.append(m)
-
-        b["nr_in_batch"] = bn
-        b["stream_mapping"] = mp
-
-    # FFmpeg
-    for x, b in user_args.items():
-        for z, flc in enumerate(b["input"]):
-            output = b["output"]
-            video_preset = b["video_preset"]
-            audio_preset = b["audio_preset"]
-            filter_complex = b["filter_complex_preset"]
-
-            # If input was directory use the index
-            if type(output) is list:
-                output = output[z]
-                video_preset = video_preset[z]
-                audio_preset = audio_preset[z]
-                filter_complex = filter_complex[z]
-
-            # Check if first/last item for reporting
-            convert_file(
-                flc,
-                output,
-                extension,
-                b["stream_mapping"][z],
-                video_preset,
-                audio_preset,
-                list_to_dict(filter_complex),
-                original_input[int(x)],
-                b["nr_in_batch"][z],
+        stream_mapping = None
+        for current_file_path_index, current_file_path in enumerate(
+            current_input_files
+        ):
+            probe_result, mapping = mkvmerge_identify_streams(
+                current_file_path,
+                total_current_input_files,
+                current_file_path_index,
+                current_batch,
+                current_input_original_batch_name,
             )
 
-    return user_args.items()
+            if mapping is None:
+                continue
 
+            stream_mapping = mapping
 
-def cli():
-    """
-    A tool for hardcoding subtitles into videos by converting MKV to MP4.
+        item["stream_mapping"] = stream_mapping
 
-    Documentation: https://github.com/ToshY/ffconv
-    """
+    # Convert
+    for item in combined_result:
+        current_batch = item.get("batch")
+        current_video_preset = item.get("video_preset")
+        current_audio_preset = item.get("audio_preset")
+        current_filter_preset = item.get("filter_preset")
+        current_output_extension = item.get("extension")
+        current_stream_mapping = item.get("stream_mapping")
+        current_output = item.get("output").get("resolved")
+        current_input_original_batch_name = item.get("input").get("given")
+        current_input_files = item.get("input").get("resolved")
+        total_current_input_files = len(current_input_files)
 
-    cli_banner('ffconv')
-
-    # Stop execution at keyboard input
-    try:
-        main_result = main()
-    except KeyboardInterrupt:
-        print("\r\n\r\n> [red]Execution cancelled by user[/red]")
-        exit()
+        for current_file_path_index, current_file_path in enumerate(
+            current_input_files
+        ):
+            ffmpeg_convert_file(
+                current_file_path,
+                current_output,
+                current_output_extension,
+                current_stream_mapping,
+                current_video_preset,
+                current_audio_preset,
+                current_filter_preset,
+                total_current_input_files,
+                current_file_path_index,
+                current_batch,
+                current_input_original_batch_name,
+            )

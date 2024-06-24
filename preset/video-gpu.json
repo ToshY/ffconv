@@ -1,0 +1,12 @@
+{
+    "-c:v": "h264_nvenc",
+    "-s": "",
+    "-r": "",
+    "-pix_fmt": "yuv420p",
+    "-cq": "20",
+    "-qmin": "19",
+    "-qmax": "21",
+    "-preset": "slow",
+    "-profile:v": "high",
+    "-level:v": "4.0"
+}

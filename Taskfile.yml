@@ -8,6 +8,7 @@ env:
     sh: id -u
   GID:
     sh: id -g
+  DOCKER_COMPOSE_RUN: docker compose --progress quiet run --rm --build
 
 tasks:
   default:
@@ -35,8 +36,7 @@ tasks:
     vars:
       TARGET: 'dev'
     cmds:
-      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - docker compose run --rm {{.TARGET}} {{.CLI_ARGS | default "/bin/bash"}}
+      - $DOCKER_COMPOSE_RUN {{.TARGET}} {{.CLI_ARGS | default "/bin/bash"}}
 
   shell:prod:
     desc: Container shell prod
@@ -53,9 +53,11 @@ tasks:
     desc: Test dev image (compose)
     vars:
       TARGET: 'dev'
+      INPUT_DIRECTORY: '{{.i | default "input"}}'
+      OUTPUT_DIRECTORY: '{{.o | default "output"}}'
     cmds:
-      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - docker compose run -u $(id -u):$(id -g) --rm {{.TARGET}} python -m ffconv -h
+      - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}}
+      - $DOCKER_COMPOSE_RUN -u $(id -u):$(id -g) {{.TARGET}} python -m ffconv {{.CLI_ARGS | default "--help"}}
 
   prod:
     desc: Test prod image (docker)
@@ -64,22 +66,34 @@ tasks:
       TARGET: 'prod'
       INPUT_DIRECTORY: '{{.i | default "input"}}'
       OUTPUT_DIRECTORY: '{{.o | default "output"}}'
+      FONTS_DIRECTORY: '{{.o | default "fonts"}}'
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output --rm {{.IMAGE}}:{{.TARGET}} -h
+      - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}} $(pwd)/{{.FONTS_DIRECTORY}}
+      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/usr/local/share/fonts --rm {{.IMAGE}}:{{.TARGET}}  {{.CLI_ARGS | default "--help"}}
 
   # Development tools
   ruff:
     desc: Run ruff
     cmds:
-      - docker compose run --rm dev ruff check .
+      - $DOCKER_COMPOSE_RUN dev ruff check .
 
   ruff:fix:
     desc: Run ruff fix
     cmds:
-      - docker compose run --rm dev ruff check --fix .
+      - $DOCKER_COMPOSE_RUN dev ruff check --fix .
+
+  black:
+    desc: Run black
+    cmds:
+      - $DOCKER_COMPOSE_RUN dev black . --check --diff --color
+
+  black:fix:
+    desc: Run black fix
+    cmds:
+      - $DOCKER_COMPOSE_RUN dev black .
 
   mypy:
     desc: Run mypy
     cmds:
-      - docker compose run --rm dev mypy .
+      - $DOCKER_COMPOSE_RUN dev mypy .
