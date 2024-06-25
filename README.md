@@ -40,8 +40,8 @@ services:
   ffconv:
     image: ghcr.io/toshy/ffconv:latest
     volumes:
-      - ./input:/input
-      - ./output:/output
+      - ./input:/app/input
+      - ./output:/app/output
 ```
 
 Then run it.
@@ -57,13 +57,14 @@ docker compose run -u $(id -u):$(id -g) --rm ffconv -h
 > ```
 
 > [!TIP]
-> Sometimes MKV files are missing embedded fonts, which can lead to incorrectly styled subtitles. In order to remediate this
-> problem, you can mount your own fonts directory to `/usr/local/share/fonts`.
+> Sometimes MKV files are missing embedded fonts, which can lead to incorrectly styled subtitles. One way to prevent this
+> from happening, is to mount an additional (system-wide) fonts directory to `/app/fonts`. FFmpeg (fontconfig) will
+> use that directory as a fallback in case an embedded font is missing.
 > ```yaml
 > # Mount local fonts directory
-> ./fonts:/usr/local/share/fonts:ro
+> ./fonts:/app/fonts:ro
 > # Mount system-wide fonts directory
-> /usr/share/fonts:/usr/local/share/fonts:ro
+> /usr/share/fonts:/app/fonts:ro
 > ```
 
 ## 🛠️ Contribute

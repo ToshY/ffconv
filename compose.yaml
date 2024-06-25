@@ -6,4 +6,3 @@ services:
       target: dev
     volumes:
       - .:/app
-      - ./fonts:/usr/local/share/fonts:ro
