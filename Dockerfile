@@ -19,6 +19,7 @@ RUN <<EOT bash
   apt install -y mkvtoolnix
   apt-get clean
   rm -rf /var/lib/apt/lists/*
+  chmod -R 777 /var/cache/fontconfig
 EOT
 
 COPY <<EOF /etc/fonts/conf.d/50-ffconv.conf
