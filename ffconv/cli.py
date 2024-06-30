@@ -24,12 +24,12 @@ from ffconv.table import table_print_stream_options
 from loguru import logger  # noqa
 
 
-def validate_stream_order(ffprobe_result):
+def validate_stream_order(mkvmerge_identify_result):
     """
     Check the order of streams in the given ffprobe result.
 
     Parameters:
-        ffprobe_result (dict): A dictionary containing the ffprobe result.
+        mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
             The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
@@ -46,11 +46,11 @@ def validate_stream_order(ffprobe_result):
     """
 
     total_streams = list(
-        range(0, sum([st["count"] for ix, st in ffprobe_result.items()]))
+        range(0, sum([st["count"] for ix, st in mkvmerge_identify_result.items()]))
     )
 
     # Check count and properly formatted file
-    for stream_type, stream_info in ffprobe_result.items():
+    for stream_type, stream_info in mkvmerge_identify_result.items():
         stream_count = stream_info["count"]
         if total_streams[:stream_count] != [
             current_stream["id"] for current_stream in stream_info["streams"]
@@ -60,12 +60,12 @@ def validate_stream_order(ffprobe_result):
         del total_streams[:stream_count]
 
 
-def validate_stream_count(ffprobe_result):
+def validate_stream_count(mkvmerge_identify_result):
     """
     Check the stream count in the given ffprobe result.
 
     Parameters:
-        ffprobe_result (dict): A dictionary containing the ffprobe result.
+        mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
             The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
@@ -77,17 +77,17 @@ def validate_stream_count(ffprobe_result):
         None
     """
 
-    for stream_type, stream_info in ffprobe_result.items():
+    for stream_type, stream_info in mkvmerge_identify_result.items():
         if stream_info["count"] < 1:
             raise StreamTypeMissingError(stream_type)
 
 
-def stream_user_input(ffprobe_result):
+def stream_user_input(mkvmerge_identify_result):
     """
     Get stream ID from user input.
 
     Parameters:
-        ffprobe_result (dict): A dictionary containing the ffprobe result.
+        mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
             The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
@@ -105,7 +105,7 @@ def stream_user_input(ffprobe_result):
 
     stream_map = {}
     stream_sum_count = 0
-    for stream_type, stream_info in ffprobe_result.items():
+    for stream_type, stream_info in mkvmerge_identify_result.items():
         if stream_info["count"] == 0:
             raise StreamTypeMissingError(stream_type)
         if stream_info["count"] == 1:
@@ -356,18 +356,22 @@ def ffmpeg_convert_file(
     "--input-path",
     "-i",
     type=click.Path(exists=True, dir_okay=True, file_okay=True, resolve_path=True),
-    required=True,
+    required=False,
     multiple=True,
     callback=InputPathChecker(),
+    show_default=True,
+    default=["./input"],
     help="Path to input file or directory",
 )
 @click.option(
     "--output-path",
     "-o",
     type=click.Path(dir_okay=True, file_okay=True, resolve_path=True),
-    required=True,
+    required=False,
     multiple=True,
     callback=OutputPathChecker(),
+    show_default=True,
+    default=["./output"],
     help="Path to output file or directory",
 )
 @click.option(
@@ -394,7 +398,7 @@ def ffmpeg_convert_file(
 )
 @click.option(
     "--filter-preset",
-    "-fc",
+    "-fp",
     type=click.Path(exists=True, dir_okay=False, file_okay=True, resolve_path=True),
     required=False,
     multiple=True,
@@ -415,14 +419,20 @@ def ffmpeg_convert_file(
     help="Output file extension",
 )
 @click.option(
-    "--auto",
+    "--auto-audio-preset",
     is_flag=True,
     show_default=True,
     default=False,
-    help="Automatically decides video, audio and filter presets to use based on input file characteristics",
+    help="Automatically decides audio preset to use based on audio stream codec",
 )
 def cli(
-    input_path, output_path, video_preset, audio_preset, filter_preset, extension, auto
+    input_path,
+    output_path,
+    video_preset,
+    audio_preset,
+    filter_preset,
+    extension,
+    auto_audio_preset,
 ):
     # auto_decide_presets = auto
     combined_result = combine_arguments_by_batch(
@@ -440,7 +450,7 @@ def cli(
         for current_file_path_index, current_file_path in enumerate(
             current_input_files
         ):
-            probe_result, mapping = mkvmerge_identify_streams(
+            mkvmerge_identify_result, mapping = mkvmerge_identify_streams(
                 current_file_path,
                 total_current_input_files,
                 current_file_path_index,

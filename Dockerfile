@@ -11,7 +11,7 @@ WORKDIR /build
 RUN <<EOT bash
   set -ex
   apt-get update
-  apt install -y build-essential cmake wget fontconfig
+  apt install -y build-essential cmake wget
   wget -O /usr/share/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg
   echo "deb [signed-by=/usr/share/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/debian/ bookworm main" > /etc/apt/sources.list.d/mkvtoolnix.download.list
   echo "deb-src [signed-by=/usr/share/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/debian/ bookworm main" >> /etc/apt/sources.list.d/mkvtoolnix.download.list
@@ -19,6 +19,7 @@ RUN <<EOT bash
   apt install -y mkvtoolnix
   apt-get clean
   rm -rf /var/lib/apt/lists/*
+  mkdir -p /var/cache/fontconfig
   chmod -R 777 /var/cache/fontconfig
 EOT
 
