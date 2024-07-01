@@ -6,6 +6,6 @@ A command-line utility for hardcoding subtitles into videos by converting MKV to
 
 Project source code is [hosted on GitHub](https://github.com/ToshY/ffconv).
 
-!!! note
+!!! info
 
-    - The documentation website is based on the `master` branch.
+    The documentation website is based on the `master` branch.

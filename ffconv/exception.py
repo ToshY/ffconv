@@ -84,12 +84,16 @@ class StreamOrderError(Exception):
     """
 
     ERROR_MESSAGE = (
-        "Stream order does not follow convention of video - audio - subtitles. Resort the streams before "
-        "continuing."
+        "Expected stream type `{expected_stream_type}` at index `{index}`, got stream type `{actual_stream_type}` "
+        "instead. Resort the streams before continuing."
     )
 
-    def __init__(self):
-        self.message = self.ERROR_MESSAGE
+    def __init__(self, expected_type, index, actual_type):
+        self.message = self.ERROR_MESSAGE.format(
+            expected_stream_type=expected_type,
+            index=index,
+            actual_stream_type=actual_type,
+        )
         super().__init__(self.message)
 
     def __str__(self):
@@ -110,8 +114,8 @@ class StreamTypeMissingError(Exception):
     """
 
     ERROR_MESSAGE = (
-        "File does not contain stream type `{stream_type}`. File needs at least 1 video (`v`), 1 audio (`a`) and 1 "
-        "subtitle (`s`) stream."
+        "File does not contain stream type `{stream_type}`. File needs at least 1 video, 1 audio and 1 "
+        "subtitle stream."
     )
 
     def __init__(self, message):

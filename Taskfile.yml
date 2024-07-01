@@ -58,7 +58,7 @@ tasks:
       OUTPUT_DIRECTORY: '{{.o | default "output"}}'
     cmds:
       - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}}
-      - $DOCKER_COMPOSE_RUN -u $(id -u):$(id -g) {{.TARGET}} python -m ffconv
+      - $DOCKER_COMPOSE_RUN -u $(id -u):$(id -g) {{.TARGET}} python -m ffconv {{.CLI_ARGS}}
 
   prod:
     desc: Test prod image (docker)
@@ -71,7 +71,7 @@ tasks:
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
       - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}} $(pwd)/{{.FONTS_DIRECTORY}}
-      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}}
+      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
   # Development tools
   ruff:

@@ -14,7 +14,7 @@ docker run -it --rm \
   -v $(pwd)/output:/app/output \
   -v $(pwd)/preset/video-custom.json:/app/preset/video-custom.json \
   -v $(pwd)/preset/audio-custom.json:/app/preset/audio-custom.json \
-  ghcr.io/toshy/ffconv:latest -vp "./preset/video-custom.json" -ap "./preset/video-custom.json"
+  ghcr.io/toshy/ffconv:latest
 ```
 
 ### 🐳 Compose
@@ -26,7 +26,8 @@ services:
     volumes:
       - ./input:/app/input
       - ./output:/app/output
-      - ./preset/custom.json:/app/preset/custom.json
+      - ./preset/video-custom.json:/app/preset/video-custom.json
+      - ./preset/audio-custom.json:/app/preset/audio-custom.json
 ```
 
 ## Video
@@ -37,7 +38,7 @@ Argument: `--video-preset` / `-vp`.
 
 ### Default
 
-???+ note "`video.json`"
+???+ example "`video.json`"
 
     ```json
     {
@@ -59,7 +60,7 @@ Argument: `--video-preset` / `-vp`.
 
 ### Movie
 
-???+ note "`movie.json`"
+???+ example "`movie.json`"
 
     ```json
     {
@@ -80,7 +81,7 @@ Argument: `--video-preset` / `-vp`.
     ```
 
 ### GPU
-???+ note "`video-gpu.json`"
+???+ example "`video-gpu.json`"
 
     If you want to leverage your GPU for encoding you can use `h264_nvenc`.
 
@@ -110,7 +111,7 @@ Argument: `--filter-preset` / `-fp`.
 In case you need more advanced video filters (e.g. changing color standard), you can
 provide additional filters that will be added to the `filter_complex` statement in the FFmpeg command.
 
-???+ note "`filter.json`"
+???+ example "`filter.json`"
 
     The following preset will convert the video to BT.601 color standard (`before`), add the subtitle, and convert the result to BT.709 color standard (`after`).
 
@@ -129,7 +130,7 @@ Argument: `--audio-preset` / `-ap`.
 
 ### Default
 
-???+ note "`audio.json`"
+???+ example "`audio.json`"
 
     Use in cases the audio is not `AAC` (e.g. `FLAC`).
 
@@ -144,7 +145,7 @@ Argument: `--audio-preset` / `-ap`.
 
 ### Copy
 
-???+ note "`audio-copy.json`"
+???+ example "`audio-copy.json`"
 
     Use in cases the audio is already `AAC`.
 

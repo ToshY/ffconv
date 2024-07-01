@@ -11,6 +11,7 @@ from ffconv.args import (
     PresetPathChecker,
     OptionalValueChecker,
     PresetOptionalChecker,
+    AutoAudioFlagChecker,
 )
 from ffconv.exception import StreamOrderError, StreamTypeMissingError
 from ffconv.helper import (
@@ -30,7 +31,7 @@ def validate_stream_order(mkvmerge_identify_result):
 
     Parameters:
         mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
-            The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+            The keys are the stream types (e.g., 'video', 'audio', 'subtitles') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
             - 'streams' (list): A list of dictionaries, each representing a stream.
@@ -45,19 +46,12 @@ def validate_stream_order(mkvmerge_identify_result):
         None
     """
 
-    total_streams = list(
-        range(0, sum([st["count"] for ix, st in mkvmerge_identify_result.items()]))
-    )
+    required_streams_order = ["video", "audio", "subtitles"]
+    for idx, (stream_type, stream_info) in enumerate(mkvmerge_identify_result.items()):
+        if required_streams_order[idx] == stream_type:
+            continue
 
-    # Check count and properly formatted file
-    for stream_type, stream_info in mkvmerge_identify_result.items():
-        stream_count = stream_info["count"]
-        if total_streams[:stream_count] != [
-            current_stream["id"] for current_stream in stream_info["streams"]
-        ]:
-            raise StreamOrderError()
-
-        del total_streams[:stream_count]
+        raise StreamOrderError(required_streams_order[idx], idx, stream_type)
 
 
 def validate_stream_count(mkvmerge_identify_result):
@@ -66,7 +60,7 @@ def validate_stream_count(mkvmerge_identify_result):
 
     Parameters:
         mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
-            The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+            The keys are the stream types (e.g., 'video', 'audio', 'subtitles') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
 
@@ -77,9 +71,11 @@ def validate_stream_count(mkvmerge_identify_result):
         None
     """
 
-    for stream_type, stream_info in mkvmerge_identify_result.items():
-        if stream_info["count"] < 1:
-            raise StreamTypeMissingError(stream_type)
+    required_streams_types = ["video", "audio", "subtitles"]
+    for required_stream_type in required_streams_types:
+        if required_stream_type in mkvmerge_identify_result:
+            continue
+        raise StreamTypeMissingError(required_stream_type)
 
 
 def stream_user_input(mkvmerge_identify_result):
@@ -88,7 +84,7 @@ def stream_user_input(mkvmerge_identify_result):
 
     Parameters:
         mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
-            The keys are the stream types (e.g., 'video', 'audio', 'subtitle') and the values
+            The keys are the stream types (e.g., 'video', 'audio', 'subtitles') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
             - 'streams' (list): A list of dictionaries, each representing a stream.
@@ -108,8 +104,12 @@ def stream_user_input(mkvmerge_identify_result):
     for stream_type, stream_info in mkvmerge_identify_result.items():
         if stream_info["count"] == 0:
             raise StreamTypeMissingError(stream_type)
+
         if stream_info["count"] == 1:
-            stream_map[stream_type] = stream_info["streams"][0]["id"]
+            stream_map[stream_type] = {
+                "id": stream_info["streams"][0]["id"],
+                "properties": stream_info["streams"][0]["properties"],
+            }
         else:
             logger.info(f"Multiple `{stream_type}` streams detected")
 
@@ -152,19 +152,30 @@ def stream_user_input(mkvmerge_identify_result):
                 show_default=True,
             )
             logger.info(f"Selected stream index: {selected_stream}")
-            stream_map[stream_type] = selected_stream
+
+            properties = {}
+            if stream_type == "audio":
+                properties = stream_info["streams"][selected_stream]["properties"]
+
+            stream_map[stream_type] = {"id": selected_stream, "properties": properties}
 
         # Remap subtitle due to filter complex
         if stream_type != "subtitles":
             stream_sum_count = stream_sum_count + stream_info["count"]
         else:
-            stream_map[stream_type] = int(stream_map[stream_type]) - stream_sum_count
+            stream_map[stream_type]["id"] = (
+                int(stream_map[stream_type]["id"]) - stream_sum_count
+            )
 
     return stream_map
 
 
 def mkvmerge_identify_streams(
-    input_file, total_items, item_index, batch_index, batch_name
+    input_file,
+    total_items,
+    item_index,
+    batch_index,
+    batch_name,
 ):
     """
     Identify and parse the streams in an MKV file.
@@ -246,6 +257,7 @@ def ffmpeg_convert_file(
     item_index: int,
     batch_index: int,
     batch_name: str,
+    auto_audio_preset: bool | dict,
 ):
     """
     Convert an input file to an output file using FFmpeg.
@@ -262,10 +274,16 @@ def ffmpeg_convert_file(
         item_index (int): The index of the current item.
         batch_index (int): The index of the batch.
         batch_name (str): The name of the batch.
+        auto_audio_preset (dict): Auto audio preset.
     """
 
     # Converting presets to lists and clearing empty values
     video_preset_list = dict_to_list(remove_empty_dict_values(video_preset))
+    if isinstance(auto_audio_preset, dict):
+        audio_preset = auto_audio_preset["default"]
+        if stream_mapping["audio"]["properties"]["codec_id"] == "A_AAC":
+            audio_preset = auto_audio_preset["copy"]
+
     audio_preset_list = dict_to_list(remove_empty_dict_values(audio_preset))
 
     if item_index == 0:
@@ -282,13 +300,13 @@ def ffmpeg_convert_file(
         )
 
     # Prepare mapping data
-    video_map_index = "0:" + str(stream_mapping["video"])
-    audio_map_index = "0:" + str(stream_mapping["audio"])
+    video_map_index = "0:" + str(stream_mapping["video"]["id"])
+    audio_map_index = "0:" + str(stream_mapping["audio"]["id"])
 
     # Filter complex subtitle map requires this escaped monstrosity for Windows
     lit_file = str(input_file).replace("\\", "\\\\").replace(":", "\:")
     filter_complex_map = (
-        "subtitles='" + lit_file + "':si=" + str(stream_mapping["subtitles"]),
+        "subtitles='" + lit_file + "':si=" + str(stream_mapping["subtitles"]["id"]),
     )
 
     # Additional filter complex options; added due to possible issues with subtitles using BT.709 color space
@@ -423,6 +441,7 @@ def ffmpeg_convert_file(
     is_flag=True,
     show_default=True,
     default=False,
+    callback=AutoAudioFlagChecker(),
     help="Automatically decides audio preset to use based on audio stream codec",
 )
 def cli(
@@ -493,4 +512,5 @@ def cli(
                 current_file_path_index,
                 current_batch,
                 current_input_original_batch_name,
+                auto_audio_preset,
             )

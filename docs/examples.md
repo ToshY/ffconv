@@ -168,6 +168,6 @@ docker run -it --rm \
   --auto-audio-preset
 ```
 
-!!! note "Decision"
+!!! note "Preset decision"
 
     If the input audio stream codec is of type `AAC`, use [`preset/audio-copy.json`](presets.md#default_1), else use [`preset/audio.json`](presets.md#default_1).

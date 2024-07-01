@@ -168,6 +168,26 @@ class PresetOptionalChecker:
         return results
 
 
+class AutoAudioFlagChecker:
+    def __call__(self, ctx, param, value: tuple):
+        if not value:
+            return value
+
+        audio_presets = {
+            "default": "./preset/audio.json",
+            "copy": "./preset/audio-copy.json",
+        }
+
+        for key, file_path in audio_presets.items():
+            p = Path(file_path)
+            if not p.is_file():
+                continue
+
+            audio_presets[key] = read_json(p)  # type: ignore[assignment]
+
+        return audio_presets
+
+
 class OptionalValueChecker:
     def __call__(self, ctx, param, value: tuple):
         if value is None:
