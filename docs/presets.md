@@ -83,7 +83,7 @@ Argument: `--video-preset` / `-vp`.
 ### GPU
 ???+ example "`video-gpu.json`"
 
-    If you want to leverage your GPU for encoding you can use `h264_nvenc`.
+    If you want to leverage your NVIDIA GPU for encoding, you can use `h264_nvenc`.
 
     ```json
     {
@@ -100,7 +100,7 @@ Argument: `--video-preset` / `-vp`.
     }
     ```
 
-    Please note that you should provide `--gpus` flag to the docker command for this to work, e.g. `--gpus all`.
+    Please note that you should provide `--gpus` flag to the docker/compose command for this to work, e.g. `--gpus all`.
 
 ## Filters
 
@@ -113,13 +113,19 @@ provide additional filters that will be added to the `filter_complex` statement 
 
 ???+ example "`filter.json`"
 
-    The following preset will convert the video to BT.601 color standard (`before`), add the subtitle, and convert the result to BT.709 color standard (`after`).
+    The following preset will convert the video from BT.709 to BT.601 color standard (`before`), add the subtitle, and convert the result back from BT.601 to BT.709 color standard (`after`).
 
     ```json
     {
         "before": "scale=in_color_matrix=bt709:out_color_matrix=bt601",
         "after": "scale=in_color_matrix=bt601:out_color_matrix=bt709"
     }
+    ```
+
+    The `-filter_complex` will look like this:
+
+    ```shell
+    -filter_complex scale=in_color_matrix=bt709:out_color_matrix=bt601,subtitles='/app/input/video.mkv':si=1,scale=in_color_matrix=bt601:out_color_matrix=bt709
     ```
 
 ## Audio

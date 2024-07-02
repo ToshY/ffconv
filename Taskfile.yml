@@ -73,6 +73,19 @@ tasks:
       - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}} $(pwd)/{{.FONTS_DIRECTORY}}
       - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
+  prod:gpu:
+    desc: Test prod image with GPU (docker)
+    silent: true
+    vars:
+      TARGET: 'prod'
+      INPUT_DIRECTORY: '{{.i | default "input"}}'
+      OUTPUT_DIRECTORY: '{{.o | default "output"}}'
+      FONTS_DIRECTORY: '{{.o | default "fonts"}}'
+    cmds:
+      - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
+      - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}} $(pwd)/{{.FONTS_DIRECTORY}}
+      - docker run -it --gpus all -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
+
   # Development tools
   ruff:
     desc: Run ruff
