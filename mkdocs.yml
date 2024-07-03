@@ -6,6 +6,8 @@ docs_dir: docs/
 site_dir: site/
 theme:
   name: material
+  icon:
+    repo: fontawesome/brands/github
   font: false
   features:
     - navigation.footer
