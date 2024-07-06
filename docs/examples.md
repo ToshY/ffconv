@@ -44,7 +44,7 @@ docker run -it --rm \
 
 ## Specific subdirectory
 
-Convert specific subdirectory and writing output to `/app/output/hits`.
+Convert files in specific subdirectory and writing output to `/app/output/hits`.
 
 ```shell
 docker run -it --rm \
@@ -58,7 +58,7 @@ docker run -it --rm \
 
 ## Multiple inputs
 
-Multiple input subdirectories and writing output to `/app/output` (default).
+Convert files in multiple input subdirectories and writing output to `/app/output` (default).
 
 ```shell
 docker run -it --rm \
@@ -75,7 +75,7 @@ docker run -it --rm \
 
 ## Multiple inputs and outputs
 
-Multiple input subdirectories and writing output to specific output subdirectories respectively.
+Convert files in multiple input subdirectories and writing output to specific output subdirectories respectively.
 
 ```shell
 docker run -it --rm \
@@ -97,7 +97,7 @@ docker run -it --rm \
 
 ## Multiple inputs, outputs and single video/audio preset
 
-Multiple input subdirectories, with single video and audio preset, and writing output to specific output subdirectories respectively.
+Convert files in multiple input subdirectories, with single video and audio preset, and writing output to specific output subdirectories respectively.
 
 ```shell
 docker run -it --rm \
@@ -121,7 +121,7 @@ docker run -it --rm \
 
 ## Multiple inputs, outputs and presets
 
-Multiple input subdirectories, with different presets, and writing output to specific output subdirectories respectively.
+Convert files in multiple input subdirectories, with different presets, and writing output to specific output subdirectories respectively.
 
 ```shell
 docker run -it --rm \
