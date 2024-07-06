@@ -47,7 +47,7 @@ tasks:
       FONTS_DIRECTORY: '{{.o | default "fonts"}}'
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --entrypoint="/bin/bash" --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
+      - docker run -it -u $(id -u):$(id -g) -v ${PWD}/{{.INPUT_DIRECTORY}}:/app/input -v ${PWD}/{{.OUTPUT_DIRECTORY}}:/app/output -v ${PWD}/{{.FONTS_DIRECTORY}}:/app/fonts --entrypoint="/bin/bash" --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
   # Test
   dev:
@@ -57,7 +57,7 @@ tasks:
       INPUT_DIRECTORY: '{{.i | default "input"}}'
       OUTPUT_DIRECTORY: '{{.o | default "output"}}'
     cmds:
-      - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}}
+      - mkdir -p ${PWD}/{{.INPUT_DIRECTORY}} ${PWD}/{{.OUTPUT_DIRECTORY}}
       - $DOCKER_COMPOSE_RUN -u $(id -u):$(id -g) {{.TARGET}} python -m ffconv {{.CLI_ARGS}}
 
   prod:
@@ -70,8 +70,8 @@ tasks:
       FONTS_DIRECTORY: '{{.o | default "fonts"}}'
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}} $(pwd)/{{.FONTS_DIRECTORY}}
-      - docker run -it -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
+      - mkdir -p ${PWD}/{{.INPUT_DIRECTORY}} ${PWD}/{{.OUTPUT_DIRECTORY}} ${PWD}/{{.FONTS_DIRECTORY}}
+      - docker run -it -u $(id -u):$(id -g) -v ${PWD}/{{.INPUT_DIRECTORY}}:/app/input -v ${PWD}/{{.OUTPUT_DIRECTORY}}:/app/output -v ${PWD}/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
   prod:gpu:
     desc: Test prod image with GPU (docker)
@@ -83,8 +83,8 @@ tasks:
       FONTS_DIRECTORY: '{{.o | default "fonts"}}'
     cmds:
       - docker buildx build --quiet --target {{.TARGET}} --tag {{.IMAGE}}:{{.TARGET}} .
-      - mkdir -p $(pwd)/{{.INPUT_DIRECTORY}} $(pwd)/{{.OUTPUT_DIRECTORY}} $(pwd)/{{.FONTS_DIRECTORY}}
-      - docker run -it --gpus all -u $(id -u):$(id -g) -v $(pwd)/{{.INPUT_DIRECTORY}}:/app/input -v $(pwd)/{{.OUTPUT_DIRECTORY}}:/app/output -v $(pwd)/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
+      - mkdir -p ${PWD}/{{.INPUT_DIRECTORY}} ${PWD}/{{.OUTPUT_DIRECTORY}} ${PWD}/{{.FONTS_DIRECTORY}}
+      - docker run -it --gpus all -u $(id -u):$(id -g) -v ${PWD}/{{.INPUT_DIRECTORY}}:/app/input -v ${PWD}/{{.OUTPUT_DIRECTORY}}:/app/output -v ${PWD}/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
   # Development tools
   ruff:
@@ -115,11 +115,11 @@ tasks:
   mkdocs:
     desc: MkDocs build
     cmds:
-      - docker run --rm -it -v $(pwd):/docs ghcr.io/squidfunk/mkdocs-material:9.5 build
+      - docker run --rm -it -v ${PWD}:/docs ghcr.io/squidfunk/mkdocs-material:9.5 build
 
   mkdocs:live:
     desc: MkDocs development server
     vars:
       PORT: '{{.p | default "8001"}}'
     cmds:
-      - docker run --rm -it -p {{.PORT}}:8000 -v $(pwd):/docs ghcr.io/squidfunk/mkdocs-material:9.5
+      - docker run --rm -it -p {{.PORT}}:8000 -v ${PWD}:/docs ghcr.io/squidfunk/mkdocs-material:9.5

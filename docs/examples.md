@@ -7,8 +7,8 @@ Add your files to the input directory of the mounted container.
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest
 ```
 
@@ -22,8 +22,8 @@ Convert only a specific file and writing output to `/app/output` (default).
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   -i "input/rick-astley-never-gonna-give-you-up.mkv"
 ```
@@ -35,8 +35,8 @@ Convert only a specific file and writing output to `/app/output/hits`.
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   -i "input/rick-astley-never-gonna-give-you-up.mkv" \
   -o "output/hits"
@@ -49,8 +49,8 @@ Convert specific subdirectory and writing output to `/app/output/hits`.
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   -i "input/hits" \
   -o "output/hits"
@@ -63,8 +63,8 @@ Multiple input subdirectories and writing output to `/app/output` (default).
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   -i "input/dir1" \
   -i "input/dir2" \
@@ -80,8 +80,8 @@ Multiple input subdirectories and writing output to specific output subdirectori
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   -i "input/dir1" \
   -i "input/dir2" \
@@ -102,8 +102,8 @@ Multiple input subdirectories, with single video and audio preset, and writing o
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   -i "input/dir1" \
   -i "input/dir2" \
@@ -126,10 +126,10 @@ Multiple input subdirectories, with different presets, and writing output to spe
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
-  -v $(pwd)/preset/video-custom.json:/app/preset/video-custom.json \
-  -v $(pwd)/preset/audio-custom.json:/app/preset/audio-custom.json \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
+  -v ${PWD}/preset/video-custom.json:/app/preset/video-custom.json \
+  -v ${PWD}/preset/audio-custom.json:/app/preset/audio-custom.json \
   ghcr.io/toshy/ffconv:latest \
   -i "input/dir1" \
   -i "input/dir2" \
@@ -162,8 +162,8 @@ This option overrides the `--audio-preset`/`-ap` option.
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest \
   --auto-audio-preset
 ```

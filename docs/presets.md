@@ -10,10 +10,10 @@ can add your custom presets by mounting files to the `/app/preset` directory.
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
-  -v $(pwd)/preset/video-custom.json:/app/preset/video-custom.json \
-  -v $(pwd)/preset/audio-custom.json:/app/preset/audio-custom.json \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
+  -v ${PWD}/preset/video-custom.json:/app/preset/video-custom.json \
+  -v ${PWD}/preset/audio-custom.json:/app/preset/audio-custom.json \
   ghcr.io/toshy/ffconv:latest
 ```
 

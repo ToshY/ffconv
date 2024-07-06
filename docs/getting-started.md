@@ -17,8 +17,8 @@ Run with `docker`.
 ```shell
 docker run -it --rm \
   -u $(id -u):$(id -g) \
-  -v $(pwd)/input:/app/input \
-  -v $(pwd)/output:/app/output \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
   ghcr.io/toshy/ffconv:latest -h
 ```
 
