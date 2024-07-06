@@ -59,16 +59,28 @@ class OutputPathChecker:
             raise click.BadParameter("No path provided")
 
         amount_of_current_param_values = len(value)
-        amount_of_input_values = len(ctx.params.get("input_path"))
+        input_path = ctx.params.get("input_path")
+        if input_path is None:
+            input_path_checker = InputPathChecker()
+            input_path = input_path_checker(ctx, param, ["./input"])
 
-        if amount_of_input_values != amount_of_current_param_values:
+        amount_of_input_values = len(input_path)
+
+        if (
+            amount_of_input_values != amount_of_current_param_values
+            and amount_of_current_param_values != 1
+        ):
             raise click.BadParameter(
                 f"The amount of input values ({amount_of_input_values}) does not "
                 f"equal amount of output values ({amount_of_current_param_values})."
             )
 
+        to_be_enumerated = value
+        if amount_of_input_values != amount_of_current_param_values:
+            to_be_enumerated = value * amount_of_input_values
+
         results = []
-        for batch_number, path in enumerate(value):
+        for batch_number, path in enumerate(to_be_enumerated):
             current_batch = {"batch": batch_number + 1}
             p = Path(path)
             if p.suffix:
@@ -96,8 +108,16 @@ class OutputPathChecker:
 
 class PresetPathChecker:
     def __call__(self, ctx, param, value: tuple):
+        if value is None:
+            raise click.BadParameter("No path provided")
+
         amount_of_current_param_values = len(value)
-        amount_of_input_values = len(ctx.params.get("input_path"))
+        input_path = ctx.params.get("input_path")
+        if input_path is None:
+            input_path_checker = InputPathChecker()
+            input_path = input_path_checker(ctx, param, ["./input"])
+
+        amount_of_input_values = len(input_path)
 
         # Either give 1 value or same exact amount as input values.
         if (
@@ -134,7 +154,12 @@ class PresetPathChecker:
 class PresetOptionalChecker:
     def __call__(self, ctx, param, value: tuple):
         amount_of_current_param_values = len(value)
-        amount_of_input_values = len(ctx.params.get("input_path"))
+        input_path = ctx.params.get("input_path")
+        if input_path is None:
+            input_path_checker = InputPathChecker()
+            input_path = input_path_checker(ctx, param, ["./input"])
+
+        amount_of_input_values = len(input_path)
 
         # Either give 1 value or same exact amount as input values.
         if (
@@ -194,7 +219,12 @@ class OptionalValueChecker:
             raise click.BadParameter("No path provided")
 
         amount_of_current_param_values = len(value)
-        amount_of_input_values = len(ctx.params.get("input_path"))
+        input_path = ctx.params.get("input_path")
+        if input_path is None:
+            input_path_checker = InputPathChecker()
+            input_path = input_path_checker(ctx, param, ["./input"])
+
+        amount_of_input_values = len(input_path)
 
         # Either give 1 value or same exact amount as input values.
         if (
