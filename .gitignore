@@ -1,12 +1,9 @@
-# pycache
-__pycache__
-**/__pycache__
-
-# pylint
-.pylind.d
-src/.pylind.d
-
-# exclude tests files and logs
-input/*
-output/*
-log/*
+# cache
+__pycache__/
+**/__pycache__/
+.ruff_cache/
+.mypy_cache/
+# miscellaneous
+input/
+output/
+fonts/

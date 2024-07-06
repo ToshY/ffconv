@@ -1,54 +1,37 @@
-# 📺 FFconv
+<h1 align="center"> 📺 FFconv </h1>
 
-This repository contains several useful command-line scripts for hardcoding, restyling, and adding attachments to MKV
-files in a (semi)-automatic fashion.
+<div align="center">
+    <img src="https://img.shields.io/github/v/release/toshy/ffconv?label=Release&sort=semver" alt="Current bundle version" />
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codestyle.yml?branch=main&label=Black" alt="Black">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codequality.yml?branch=main&label=Ruff" alt="Ruff">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/statictyping.yml?branch=main&label=Mypy" alt="Mypy">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/security.yml?branch=main&label=Security%20check" alt="Security check" />
+    <br /><br />
+    <div>A command-line utility for hardcoding subtitles into videos by converting MKV to MP4.</div>
+</div>
 
-### FFconv
-
-Tool for hardcoding subtitles into videos; converting MKV to web compatible MP4.
-
-### MKVresort
-
-Tool for reordering streams in a user-defined fashion.
-
-### MKVrestyle
-
-Tool for basic restyling of an embedded ASS file with a new user-defined font and styling.
-
-### MKVrefont
-
-Tool for adding attachments (subtitles, fonts) to existing MKV files.
-
-## Installation
-
-Install the required packages with `pip`:
-
-```
-pip3 install -r requirements.txt
-```
-
-## Usage
-
-### FFconv
+## 📝 Quickstart
 
 ```shell
-python ffconv.py -i "./input/" -o "./output/" -e "mp4"
+docker run -it --rm \
+  -u $(id -u):$(id -g) \
+  -v ${PWD}/input:/app/input \
+  -v ${PWD}/output:/app/output \
+  ghcr.io/toshy/ffconv:latest
 ```
 
-### MKVresort
+## 📜 Documentation
 
-```shell
-python mkvremux.py -i "input/file.mkv" -o "output" -s "preset/sort_preset.json"
-```
+The documentation is available at [https://toshy.github.io/ffconv](https://toshy.github.io/ffconv).
 
-### MKVrestyle
+## 🛠️ Contribute
 
-```shell
-python mkvrestyle.py -i "./input/" -o "./output/" -sp "./preset/subtitle_preset.json"
-```
+### Requirements
 
-### MKVrefont
+* ☑️ [Pre-commit](https://pre-commit.com/#installation).
+* 🐋 [Docker Compose V2](https://docs.docker.com/compose/install/)
+* 📋 [Task 3.37+](https://taskfile.dev/installation/)
 
-```shell
-python mkvattach.py -i "./input/myfile.mkv" -o "./output" -f "./input/fonts"
-```
+## ❕ License
+
+This repository comes with a [MIT license](./LICENSE).

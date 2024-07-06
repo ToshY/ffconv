@@ -1,4 +1,0 @@
-{
-    "before": "scale=in_color_matrix=bt709:out_color_matrix=bt601,",
-    "after": ",scale=in_color_matrix=bt601:out_color_matrix=bt709"
-}
