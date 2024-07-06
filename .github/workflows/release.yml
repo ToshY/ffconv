@@ -7,12 +7,14 @@ on:
 
 env:
   DOCKER_IMAGE: toshy/ffconv
-  BASE_TAG: toshy/ffconv:base
 
 jobs:
   release:
     name: Build docker image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,23 +43,23 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Build base image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
           load: true
-          target: base
-          tags: ${{ env.BASE_TAG }}
+          target: prod
+          tags: ${{ env.DOCKER_IMAGE }}:prod
 
       - name: Test base image
         run: |
-          docker run --rm ${{ env.BASE_TAG }} -h
+          docker run --rm ${{ env.DOCKER_IMAGE }}:prod --help
 
       - name: Build and push production image
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: ffconv
           push: true
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          target: prod
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
