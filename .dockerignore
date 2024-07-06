@@ -16,3 +16,5 @@ Taskfile.yml
 input/
 output/
 fonts/
+docs/
+mkdocs.yml

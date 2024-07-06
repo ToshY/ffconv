@@ -12,7 +12,7 @@ docker run -it --rm \
   ghcr.io/toshy/ffconv:latest
 ```
 
-By default, it will find all files from the `/app/input` directory (recursively) and write them to the `/app/output` directory. If
+By default, it will find all files from the `/app/input` directory (recursively) and write the output to the `/app/output` directory. If
 no presets are provided, it will automatically use the [`preset/video.json`](presets.md#default) and [`preset/audio.json`](presets.md#default_1).
 
 ## Specific file
@@ -146,7 +146,7 @@ docker run -it --rm \
   -ap "preset/audio-copy.json" \
   -ap "preset/audio-custom.json" \
   -ap "preset/audio-copy.json" \
-  -fp "preset/filter.json"
+  -fp "preset/filter.json" \
   -o "output/dir1" \
   -o "output/dir2" \
   -o "output/dir3" \
