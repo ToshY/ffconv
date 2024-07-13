@@ -2,10 +2,10 @@
 
 <div align="center">
     <img src="https://img.shields.io/github/v/release/toshy/ffconv?label=Release&sort=semver" alt="Current bundle version" />
-    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codestyle.yml?branch=main&label=Black" alt="Black">
-    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codequality.yml?branch=main&label=Ruff" alt="Ruff">
-    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/statictyping.yml?branch=main&label=Mypy" alt="Mypy">
-    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/security.yml?branch=main&label=Security%20check" alt="Security check" />
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codestyle.yml?branch=master&label=Black" alt="Black">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codequality.yml?branch=master&label=Ruff" alt="Ruff">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/statictyping.yml?branch=master&label=Mypy" alt="Mypy">
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/security.yml?branch=master&label=Security%20check" alt="Security check" />
     <br /><br />
     <div>A command-line utility for hardcoding subtitles into videos by converting MKV to MP4.</div>
 </div>
