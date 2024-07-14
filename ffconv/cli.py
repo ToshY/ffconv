@@ -19,6 +19,7 @@ from ffconv.helper import (
     combine_arguments_by_batch,
     remove_empty_dict_values,
     dict_to_list,
+    preprocess_streams,
 )
 from ffconv.process import ProcessCommand
 from ffconv.table import table_print_stream_options
@@ -155,7 +156,8 @@ def stream_user_input(mkvmerge_identify_result):
 
             properties = {}
             if stream_type == "audio":
-                properties = stream_info["streams"][selected_stream]["properties"]
+                preprocessed_streams = preprocess_streams(stream_info["streams"])
+                properties = preprocessed_streams.get(selected_stream)["properties"]
 
             stream_map[stream_type] = {"id": selected_stream, "properties": properties}
 
