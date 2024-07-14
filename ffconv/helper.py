@@ -136,3 +136,11 @@ def combine_arguments_by_batch(*lists):
     result = [value for key, value in combined.items()]
 
     return result
+
+
+def preprocess_streams(streams_list):
+    """
+    Preprocess the streams list by converting it to a dictionary with the stream IDs as keys.
+    """
+
+    return {stream["id"]: stream for stream in streams_list}
