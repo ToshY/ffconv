@@ -502,7 +502,7 @@ def cli(
         ):
             ffmpeg_convert_file(
                 current_file_path,
-                current_output[current_file_path_index],
+                current_output,
                 current_output_extension,
                 current_stream_mapping,
                 current_video_preset,
