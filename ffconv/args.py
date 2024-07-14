@@ -80,28 +80,45 @@ class OutputPathChecker:
             to_be_enumerated = value * amount_of_input_values
 
         results = []
-        for batch_number, path in enumerate(to_be_enumerated):
-            current_batch = {"batch": batch_number + 1}
-            p = Path(path)
-            if p.suffix:
-                if not p.parent.is_dir():
-                    raise FileNotFoundError(
-                        f"The parent directory `{str(p.parent)}` "
-                        f"for output argument `{str(p)}` does not exist."
-                    )
-                else:
+        for batch_number, output_path in enumerate(to_be_enumerated):
+            relative_path_to_output = Path(output_path).relative_to("/app/output")
+            append_input_subdirectory = False
+            if relative_path_to_output == Path("."):
+                append_input_subdirectory = True
+
+            files = []
+            for resolved_input_number, resolved_input_path in enumerate(
+                input_path[batch_number].get("input").get("resolved")
+            ):
+                relative_path_to_input = resolved_input_path.relative_to(
+                    Path("/app/input")
+                )
+
+                p = Path(output_path)
+                if append_input_subdirectory:
+                    p = p / Path(*relative_path_to_input.parts[:-1])
+
+                files.append(p)
+                current_batch = {"batch": batch_number + 1}
+                if p.suffix:
+                    if not p.parent.is_dir():
+                        p.parent.mkdir(parents=True)
                     current_batch = {
                         **current_batch,
-                        "output": {"given": path, "resolved": p},
+                        "output": {"given": output_path, "resolved": files},
                     }
-            else:
+                    results.append(current_batch)
+                    continue
+
                 if not p.is_dir():
-                    p.mkdir()
+                    p.mkdir(parents=True)
+
                 current_batch = {
                     **current_batch,
-                    "output": {"given": path, "resolved": p},
+                    "output": {"given": output_path, "resolved": files},
                 }
-            results.append(current_batch)
+
+                results.append(current_batch)
 
         return results
 
