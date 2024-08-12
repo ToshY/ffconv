@@ -38,8 +38,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 FROM base as ffmpeg
 
-COPY --from=mwader/static-ffmpeg:7.0.1 /ffmpeg /usr/bin/
-COPY --from=mwader/static-ffmpeg:7.0.1 /ffprobe /usr/bin/
+COPY --from=mwader/static-ffmpeg:7.0.2 /ffmpeg /usr/bin/
+COPY --from=mwader/static-ffmpeg:7.0.2 /ffprobe /usr/bin/
 
 FROM ffmpeg AS prod
 
