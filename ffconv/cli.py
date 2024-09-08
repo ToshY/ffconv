@@ -26,25 +26,19 @@ from ffconv.table import table_print_stream_options
 from loguru import logger  # noqa
 
 
-def validate_stream_order(mkvmerge_identify_result):
+def validate_stream_order(mkvmerge_identify_result, file_details):
     """
-    Check the order of streams in the given ffprobe result.
+    Check the stream order in the given mkvmerge result.
 
     Parameters:
-        mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
+        mkvmerge_identify_result (dict): A dictionary containing the mkvmerge result.
             The keys are the stream types (e.g., 'video', 'audio', 'subtitles') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
-            - 'streams' (list): A list of dictionaries, each representing a stream.
-                Each stream dictionary has the following keys:
-                - 'id' (int): The ID of the stream.
-                - 'properties' (dict): A dictionary containing additional properties of the stream.
+        file_details (dict): A dictionary containing the file name and batch name.
 
     Raises:
-        StreamOrderError: If the stream orders are not standardized.
-
-    Returns:
-        None
+        StreamOrderError: If the stream order does not follow convention video - audio - subtitles.
     """
 
     required_streams_order = ["video", "audio", "subtitles"]
@@ -52,31 +46,31 @@ def validate_stream_order(mkvmerge_identify_result):
         if required_streams_order[idx] == stream_type:
             continue
 
-        raise StreamOrderError(required_streams_order[idx], idx, stream_type)
+        raise StreamOrderError(
+            required_streams_order[idx], idx, stream_type, file_details
+        )
 
 
-def validate_stream_count(mkvmerge_identify_result):
+def validate_stream_count(mkvmerge_identify_result, file_details):
     """
-    Check the stream count in the given ffprobe result.
+    Validates the stream count in the given mkvmerge result.
 
     Parameters:
-        mkvmerge_identify_result (dict): A dictionary containing the ffprobe result.
+        mkvmerge_identify_result (dict): A dictionary containing the mkvmerge result.
             The keys are the stream types (e.g., 'video', 'audio', 'subtitles') and the values
             are dictionaries with the following keys:
             - 'count' (int): The number of streams of that type.
+        file_details (dict): A dictionary containing the file name and batch name.
 
     Raises:
-        StreamTypeMissingError: If any stream count is less than 1.
-
-    Returns:
-        None
+        StreamTypeMissingError: If a required stream type is missing in the mkvmerge result.
     """
 
     required_streams_types = ["video", "audio", "subtitles"]
     for required_stream_type in required_streams_types:
         if required_stream_type in mkvmerge_identify_result:
             continue
-        raise StreamTypeMissingError(required_stream_type)
+        raise StreamTypeMissingError(required_stream_type, file_details)
 
 
 def stream_user_input(mkvmerge_identify_result):
@@ -231,8 +225,10 @@ def mkvmerge_identify_streams(
         streams[s]["streams"] = split_streams[x]
         streams[s]["count"] = len(streams[s]["streams"])
 
-    validate_stream_count(streams)
-    validate_stream_order(streams)
+    file_details = {"file_name": input_file, "batch_name": batch_name}
+
+    validate_stream_count(streams, file_details)
+    validate_stream_order(streams, file_details)
 
     # Check if first file from batch for mapping in conversion later
     mapping = None

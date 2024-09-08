@@ -85,14 +85,16 @@ class StreamOrderError(Exception):
 
     ERROR_MESSAGE = (
         "Expected stream type `{expected_stream_type}` at index `{index}`, got stream type `{actual_stream_type}` "
-        "instead. Resort the streams before continuing."
+        "instead for file `{file_name}` in batch `{batch_name}`. Resort the streams before continuing."
     )
 
-    def __init__(self, expected_type, index, actual_type):
+    def __init__(self, expected_type, index, actual_type, file_details):
         self.message = self.ERROR_MESSAGE.format(
             expected_stream_type=expected_type,
             index=index,
             actual_stream_type=actual_type,
+            file_name=str(file_details["file_name"]),
+            batch_name=file_details["batch_name"],
         )
         super().__init__(self.message)
 
@@ -114,12 +116,16 @@ class StreamTypeMissingError(Exception):
     """
 
     ERROR_MESSAGE = (
-        "File does not contain stream type `{stream_type}`. File needs at least 1 video, 1 audio and 1 "
+        "File does not contain stream type `{stream_type}` for file `{file_name}` in batch `{batch_name}`. File needs at least 1 video, 1 audio and 1 "
         "subtitle stream."
     )
 
-    def __init__(self, message):
-        self.message = self.ERROR_MESSAGE.format(stream_type=message)
+    def __init__(self, message, file_details):
+        self.message = self.ERROR_MESSAGE.format(
+            stream_type=message,
+            file_name=str(file_details["file_name"]),
+            batch_name=file_details["batch_name"],
+        )
         super().__init__(self.message)
 
     def __str__(self):
