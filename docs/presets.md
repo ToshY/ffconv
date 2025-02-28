@@ -7,7 +7,7 @@ can add your custom presets by mounting files to the `/app/preset` directory.
 
 ### 🐋 Docker
 
-```shell
+```sh
 docker run -it --rm \
   -u $(id -u):$(id -g) \
   -v ${PWD}/input:/app/input \
@@ -124,7 +124,7 @@ provide additional filters that will be added to the `filter_complex` statement 
 
     The `-filter_complex` will look like this:
 
-    ```shell
+    ```sh
     -filter_complex scale=in_color_matrix=bt709:out_color_matrix=bt601,subtitles='/app/input/video.mkv':si=1,scale=in_color_matrix=bt601:out_color_matrix=bt709
     ```
 
