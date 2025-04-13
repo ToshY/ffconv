@@ -36,10 +36,10 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir --upgrade --force-reinstall 'setuptools>=65.5.1'
 
-FROM base as ffmpeg
+FROM base AS ffmpeg
 
-COPY --from=mwader/static-ffmpeg:7.0.2 /ffmpeg /usr/bin/
-COPY --from=mwader/static-ffmpeg:7.0.2 /ffprobe /usr/bin/
+COPY --from=mwader/static-ffmpeg:7.1.1 /ffmpeg /usr/bin/
+COPY --from=mwader/static-ffmpeg:7.1.1 /ffprobe /usr/bin/
 
 FROM ffmpeg AS prod
 
