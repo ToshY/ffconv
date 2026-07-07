@@ -56,6 +56,19 @@ jobs:
         run: |
           docker run --rm ${{ env.DOCKER_IMAGE }}:prod --help
 
+      - name: Verify fontconfig is present (libass font matching)
+        run: |
+          docker run --rm --entrypoint /bin/bash ${{ env.DOCKER_IMAGE }}:prod -euo pipefail -c '
+            echo "Checking fontconfig runtime prerequisites..."
+            test -f /etc/fonts/fonts.conf || { echo "::error::/etc/fonts/fonts.conf missing (fontconfig-config not installed)"; exit 1; }
+            test -f /etc/fonts/conf.d/50-ffconv.conf || { echo "::error::/etc/fonts/conf.d/50-ffconv.conf drop-in missing"; exit 1; }
+            command -v fc-cache >/dev/null || { echo "::error::fc-cache not found (fontconfig package not installed)"; exit 1; }
+            command -v fc-list >/dev/null || { echo "::error::fc-list not found (fontconfig package not installed)"; exit 1; }
+            fc-cache -f
+            fc-list | head
+            echo "fontconfig OK"
+          '
+
       - name: Build and push production image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
