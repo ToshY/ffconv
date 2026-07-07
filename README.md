@@ -6,6 +6,9 @@
     <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/codequality.yml?branch=master&label=Ruff" alt="Ruff">
     <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/statictyping.yml?branch=master&label=Mypy" alt="Mypy">
     <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/security.yml?branch=master&label=Security%20check" alt="Security check" />
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/zizmor.yml?branch=master&label=Zizmor" alt="Zizmor" />
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/actionlint.yml?branch=master&label=Actionlint" alt="Actionlint" />
+    <img src="https://img.shields.io/github/actions/workflow/status/toshy/ffconv/hadolint.yml?branch=master&label=Hadolint" alt="Hadolint" />
     <br /><br />
     <div>A command-line utility for hardcoding subtitles into videos by converting MKV to MP4.</div>
 </div>

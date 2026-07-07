@@ -8,15 +8,16 @@ ENV PIP_ROOT_USER_ACTION=ignore
 
 WORKDIR /build
 
+# hadolint ignore=DL3008
 RUN <<EOT bash
   set -ex
   apt-get update
-  apt install -y build-essential cmake wget
-  wget -O /usr/share/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg
+  apt-get install -y --no-install-recommends build-essential cmake wget
+  wget --progress=dot:giga -O /usr/share/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg
   echo "deb [signed-by=/usr/share/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/debian/ bookworm main" > /etc/apt/sources.list.d/mkvtoolnix.download.list
   echo "deb-src [signed-by=/usr/share/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/debian/ bookworm main" >> /etc/apt/sources.list.d/mkvtoolnix.download.list
   apt-get update
-  apt install -y mkvtoolnix
+  apt-get install -y --no-install-recommends mkvtoolnix
   apt-get clean
   rm -rf /var/lib/apt/lists/*
   mkdir -p /var/cache/fontconfig
@@ -45,13 +46,13 @@ FROM ffmpeg AS prod
 
 COPY . .
 
-RUN pip install .
+RUN pip install --no-cache-dir .
 
 WORKDIR /app
 
 RUN <<EOT bash
   set -ex
-  mkdir -p ./{input,output,preset,fonts}
+  mkdir -p ./input ./output ./preset ./fonts
   cp -r /build/preset ./
   rm -rf /build
 EOT

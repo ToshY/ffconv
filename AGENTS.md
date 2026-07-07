@@ -25,7 +25,7 @@ Everything runs in containers via `Taskfile.yml`; there is **no local venv or py
 - Build images: `task build` (dev + prod targets).
 - Run the tool against `input/`→`output/`: `task prod -- -i input/foo.mkv -o output` (or `task dev -- <cli args>`; GPU: `task prod:gpu`).
 - Lint/format/type-check (CI gates, all Docker-based): `task ruff`, `task black`, `task mypy` (use `:fix` variants to auto-fix). Line length limit is 88 (Black/Ruff defaults).
-- Docs: `task mkdocs:live` (MkDocs Material on :8001).
+- Docs: `task docs:live` (Zensical dev server on :8001; config in `zensical.toml`).
 - Open a shell: `task shell:dev`.
 
 ## Releasing / version bumps

@@ -17,4 +17,5 @@ input/
 output/
 fonts/
 docs/
+site/
 mkdocs.yml
