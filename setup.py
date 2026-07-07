@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages  # type: ignore
 import os
 
-VERSION = "2.2.0"
+VERSION = "3.0.0"
 
 
 def parse_requirements(filename):
