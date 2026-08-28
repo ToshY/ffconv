@@ -3,27 +3,27 @@ from datetime import datetime
 from pathlib import Path
 
 import click
+from loguru import logger
 from rich.prompt import IntPrompt
 
 from ffconv.args import (
-    InputPathChecker,
-    OutputPathChecker,
-    PresetPathChecker,
-    OptionalValueChecker,
-    PresetOptionalChecker,
     AutoAudioFlagChecker,
+    InputPathChecker,
+    OptionalValueChecker,
+    OutputPathChecker,
+    PresetOptionalChecker,
+    PresetPathChecker,
 )
 from ffconv.exception import StreamOrderError, StreamTypeMissingError
 from ffconv.helper import (
-    split_list_of_dicts_by_key,
     combine_arguments_by_batch,
-    remove_empty_dict_values,
     dict_to_list,
     preprocess_streams,
+    remove_empty_dict_values,
+    split_list_of_dicts_by_key,
 )
 from ffconv.process import ProcessCommand
 from ffconv.table import table_print_stream_options
-from loguru import logger  # noqa
 
 
 def validate_stream_order(mkvmerge_identify_result, file_details):
@@ -116,21 +116,9 @@ def stream_user_input(mkvmerge_identify_result):
                 {
                     "id": cs["id"],
                     "codec": cs["properties"]["codec_id"],
-                    "language": (
-                        cs["properties"]["language"]
-                        if "language" in cs["properties"]
-                        else "n/a"
-                    ),
-                    "title": (
-                        cs["properties"]["track_name"]
-                        if "track_name" in cs["properties"]
-                        else "n/a"
-                    ),
-                    "default": (
-                        cs["properties"]["default_track"]
-                        if "default_track" in cs["properties"]
-                        else "n/a"
-                    ),
+                    "language": cs["properties"].get("language", "n/a"),
+                    "title": cs["properties"].get("track_name", "n/a"),
+                    "default": cs["properties"].get("default_track", "n/a"),
                 }
                 for cs in stream_info["streams"]
             ]
@@ -302,7 +290,7 @@ def ffmpeg_convert_file(
     audio_map_index = "0:" + str(stream_mapping["audio"]["id"])
 
     # Filter complex subtitle map requires this escaped monstrosity for Windows
-    lit_file = str(input_file).replace("\\", "\\\\").replace(":", "\:")
+    lit_file = str(input_file).replace("\\", "\\\\").replace(":", r"\:")
     filter_complex_map = (
         "subtitles='" + lit_file + "':si=" + str(stream_mapping["subtitles"]["id"]),
     )
@@ -326,7 +314,7 @@ def ffmpeg_convert_file(
     filter_complex_map_concat = ",".join(filter_complex_map)
     filter_complex_map_complete = f"[{video_map_index}]{filter_complex_map_concat}"
 
-    current_datetime = datetime.now()
+    current_datetime = datetime.now().astimezone()
     metadata_encoded_date = (
         f'comment=Encoded on {current_datetime.strftime("%Y-%m-%d %H:%M:%S")}'
     )
@@ -467,7 +455,7 @@ def cli(
         for current_file_path_index, current_file_path in enumerate(
             current_input_files
         ):
-            mkvmerge_identify_result, mapping = mkvmerge_identify_streams(
+            _mkvmerge_identify_result, mapping = mkvmerge_identify_streams(
                 current_file_path,
                 total_current_input_files,
                 current_file_path_index,

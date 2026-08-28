@@ -1,6 +1,6 @@
 import subprocess as sp
 
-from ffconv.exception import MKVmergeError, ProcessError, FFmpegError
+from ffconv.exception import FFmpegError, MKVmergeError, ProcessError
 
 
 class ProcessCommand:
@@ -43,7 +43,7 @@ class ProcessCommand:
             f"The following {process} command will be executed: {' '.join(command)}"
         )
 
-        response = sp.run(command, stdout=sp.PIPE, stderr=sp.PIPE)
+        response = sp.run(command, capture_output=True, check=False)
         return_code = response.returncode
         if return_code == 0:
             self.logger.info(f"{process} completed.")

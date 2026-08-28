@@ -1,5 +1,6 @@
-from setuptools import setup, find_packages  # type: ignore
 import os
+
+from setuptools import find_packages, setup  # type: ignore
 
 VERSION = "3.0.0"
 
