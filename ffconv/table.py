@@ -18,7 +18,7 @@ def table_print_stream_options(tracks: list) -> None:
     table = Table(show_header=True, header_style="bold cyan")
 
     # Header
-    for key in tracks[0].keys():
+    for key in tracks[0]:
         table.add_column(key.capitalize())
 
     # Rows
