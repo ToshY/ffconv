@@ -8,6 +8,7 @@ compose.yml
 compose.yaml
 compose.override.yml
 compose.override.yaml
+tests/
 __pycache__/
 .ruff_cache/
 .mypy_cache/
