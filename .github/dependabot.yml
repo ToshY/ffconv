@@ -5,7 +5,7 @@ updates:
     groups: {github-actions: {patterns: ['*']}}
     schedule: {interval: weekly}
     cooldown:
-      default-days: 3
+      default-days: 7
     assignees:
       - ToshY
   - package-ecosystem: pip
@@ -14,5 +14,7 @@ updates:
     schedule:
       interval: weekly
       day: sunday
+    cooldown:
+      default-days: 7
     assignees:
       - ToshY

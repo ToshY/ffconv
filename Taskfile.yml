@@ -155,10 +155,16 @@ tasks:
       - docker run --rm -v "{{.ROOT_DIR}}:/repo" -w /repo "{{.ACTIONLINT_IMAGE}}" -color
 
   zizmor:
-    desc: Audit GitHub Actions workflows for security issues in .github/workflows
+    desc: Audit GitHub Actions workflows and Dependabot config for security issues
+    summary: |
+      Audit everything in .github that zizmor understands: workflows, composite
+      actions and dependabot.yml.
+
+      Limiting this to `--collect=workflows` hides findings that GitHub's own
+      zizmor integration does report, such as the Dependabot cooldown audit.
     silent: true
     cmds:
-      - docker run --rm -v "{{.ROOT_DIR}}:/repo" -w /repo "{{.ZIZMOR_IMAGE}}" --color=always --collect=workflows .
+      - docker run --rm -v "{{.ROOT_DIR}}:/repo" -w /repo "{{.ZIZMOR_IMAGE}}" --color=always .
 
   pinact:
     desc: Validate GitHub Actions are pinned to commit SHAs in .github/workflows
