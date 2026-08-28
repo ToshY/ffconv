@@ -91,6 +91,19 @@ tasks:
       - docker run -it --gpus all -u $(id -u):$(id -g) -v ${PWD}/{{.INPUT_DIRECTORY}}:/app/input -v ${PWD}/{{.OUTPUT_DIRECTORY}}:/app/output -v ${PWD}/{{.FONTS_DIRECTORY}}:/app/fonts --rm {{.IMAGE}}:{{.TARGET}} {{.CLI_ARGS}}
 
   # Development tools
+  test:
+    desc: Run tests
+    summary: |
+      Run the pytest test suite inside the dev container.
+
+      Usage:
+      - task test
+      - task test -- -v
+      - task test -- --cov=ffconv
+      - task test -- tests/test_helper.py
+    cmds:
+      - $DOCKER_COMPOSE_RUN dev python3 -m pytest tests/ {{.CLI_ARGS}}
+
   ruff:
     desc: Run ruff
     cmds:
