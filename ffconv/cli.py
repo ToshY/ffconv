@@ -16,6 +16,7 @@ from ffconv.args import (
 )
 from ffconv.exception import StreamOrderError, StreamTypeMissingError
 from ffconv.helper import (
+    OUTPUT_EXTENSIONS,
     combine_arguments_by_batch,
     dict_to_list,
     preprocess_streams,
@@ -414,7 +415,7 @@ def ffmpeg_convert_file(
 @click.option(
     "--extension",
     "-ext",
-    type=click.Choice(["mp4", "webm", "avi"]),
+    type=click.Choice(list(OUTPUT_EXTENSIONS)),
     required=False,
     multiple=True,
     callback=OptionalValueChecker(),

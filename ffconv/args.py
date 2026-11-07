@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 
 from ffconv.helper import (
+    OUTPUT_EXTENSIONS,
     files_in_dir,
     read_json,
     replace_conflicting_characters_in_filename,
@@ -83,7 +84,18 @@ class OutputPathChecker:
         for batch_number, path in enumerate(to_be_enumerated):
             current_batch = {"batch": batch_number + 1}
             p = Path(path)
-            if p.suffix:
+            current_input = input_path[batch_number]["input"]
+            input_is_multi = (
+                len(current_input["resolved"]) > 1
+                or Path(current_input["given"]).is_dir()
+            )
+            if p.suffix.lower().lstrip(".") in OUTPUT_EXTENSIONS and not p.is_dir():
+                if input_is_multi:
+                    raise click.BadParameter(
+                        f"Output `{p!s}` must be a directory when the input "
+                        f"`{current_input['given']}` is a directory or contains "
+                        f"multiple files."
+                    )
                 if not p.parent.is_dir():
                     raise FileNotFoundError(
                         f"The parent directory `{p.parent!s}` "
