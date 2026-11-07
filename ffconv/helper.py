@@ -5,6 +5,8 @@ import json
 import re
 from pathlib import Path
 
+OUTPUT_EXTENSIONS = ("mp4", "webm", "avi")
+
 
 def files_in_dir(path: Path, file_types=None):
     """
