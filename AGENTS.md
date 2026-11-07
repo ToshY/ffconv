@@ -34,7 +34,7 @@ Everything runs in containers via `Taskfile.yml`; there is **no local venv or py
 - Fonts a subtitle references (e.g. `\fnGentium Basic`) are resolved from: fonts **embedded in the MKV** (libass extracts attachments automatically) and the mounted `fonts/` → `/app/fonts` dir. If a sign renders wrong, first check the font is embedded/present — it is usually a font issue, not an ffmpeg/libass version regression.
 
 ## Releasing / version bumps
-- The package version has a **single source of truth**: `VERSION` in `setup.py` (e.g. `VERSION = "3.0.0"`). Nothing else hardcodes it — the README release badge is a dynamic shields.io image, and `Taskfile.yml`'s `version: '3'` is the Taskfile schema, not the app.
+- The package version has a **single source of truth**: `VERSION` in `setup.py` (e.g. `VERSION = "3.2.0"`). Nothing else hardcodes it — the README release badge is a dynamic shields.io image, and `Taskfile.yml`'s `version: '3'` is the Taskfile schema, not the app.
 - Pinned external tool versions live in the `Dockerfile`: `mwader/static-ffmpeg:<tag>` (both `/ffmpeg` and `/ffprobe` COPY lines) and `ARG PYTHON_IMAGE_VERSION`.
 - Release flow = bump `setup.py` (+ any Dockerfile pins), commit, then push a matching `vX.Y.Z` git tag; the tag triggers the GitHub Actions publish to `ghcr.io/toshy/ffconv`. Verify the image still builds with `task build` before tagging.
 
